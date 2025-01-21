@@ -1,10 +1,5 @@
 from django.db import models
 
-class Status(models.TextChoices):
-    OPEN = 'OPEN', 'Abierto'
-    CLOSED = 'CLOSED', 'Cerrado'
-    ALL = 'ALL', 'Todos'
-
 class Repository(models.Model):
     repository_id = models.AutoField(primary_key=True)
     owner = models.CharField(max_length=255)
@@ -35,7 +30,7 @@ class Issue(models.Model):
     issue_id = models.AutoField(primary_key=True)
     git_id = models.BigIntegerField(unique=True)
     html_url = models.URLField()
-    status = models.CharField(max_length=10, choices=Status.choices)
+    status = models.BooleanField(default=True)
     title = models.CharField(max_length=255)
     discarded = models.BooleanField(default=False)
     labels = models.TextField(null=True, blank=True)
@@ -62,3 +57,12 @@ class IssueTag(models.Model):
 
     def __str__(self):
         return f"{self.issue.title} - {self.tag.name}"
+    
+class GitHubToken(models.Model):
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    description = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'github_token'

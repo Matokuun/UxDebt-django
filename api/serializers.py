@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Repository, Issue, Tag, IssueTag
+from .models import Repository, Issue, Tag, IssueTag, GitHubToken
 
 class RepositoryCreateSerializer(serializers.ModelSerializer):
     owner = serializers.CharField()
@@ -34,7 +34,7 @@ class TagSerializer(serializers.ModelSerializer):
 class IssueSerializer(serializers.ModelSerializer):
     issueId = serializers.IntegerField(source='issue_id')
     Title = serializers.CharField(source='title')
-    observation = serializers.CharField(allow_null=True)
+    observation = serializers.CharField(allow_blank=True, required=False)
     Status = serializers.CharField(source='status')
     Discarded = serializers.BooleanField(source='discarded')
     CreatedAt = serializers.DateTimeField(source='created_at')
@@ -59,6 +59,7 @@ class GetIssueViewModelSerializer(serializers.ModelSerializer):
     title = serializers.CharField()
     status = serializers.CharField()
     discarded = serializers.BooleanField()
+    observation = serializers.CharField(allow_null=True)
     repoName = serializers.CharField(source='repository.name')
     createdAt = serializers.DateTimeField(source='created_at')
     closedAt = serializers.DateTimeField(source='closed_at', allow_null=True)
@@ -69,4 +70,9 @@ class GetIssueViewModelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Issue
-        fields = ['issueId', 'title', 'status', 'discarded', 'repoName', 'createdAt', 'closedAt', 'labels', 'repositoryId', 'tags']
+        fields = ['issueId', 'title', 'status', 'discarded', 'observation', 'repoName', 'createdAt', 'closedAt', 'labels', 'repositoryId', 'tags']
+
+class GitConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GitHubToken
+        fields = ['token']
