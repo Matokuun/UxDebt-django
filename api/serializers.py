@@ -40,13 +40,13 @@ class IssueSerializer(serializers.ModelSerializer):
     CreatedAt = serializers.DateTimeField(source='created_at')
     RepositoryId = serializers.IntegerField(source='repository_id')
     tags = TagSerializer(many=True, read_only=True) 
-
+    htmlUrl = serializers.CharField(source='html_url')
 
     class Meta:
         model = Issue
         fields = [
             'issueId', 'Title', 'observation', 'Status', 'Discarded', 
-            'CreatedAt', 'RepositoryId', 'tags'
+            'CreatedAt', 'RepositoryId', 'tags', 'htmlUrl'
         ]
 
 class IssueTagSerializer(serializers.ModelSerializer):
@@ -66,11 +66,12 @@ class GetIssueViewModelSerializer(serializers.ModelSerializer):
     labels = serializers.JSONField()
     repositoryId = serializers.IntegerField(source='repository_id') 
     tags = TagSerializer(many=True, read_only=True) 
+    htmlUrl = serializers.CharField(source='html_url')
 
 
     class Meta:
         model = Issue
-        fields = ['issueId', 'title', 'status', 'discarded', 'observation', 'repoName', 'createdAt', 'closedAt', 'labels', 'repositoryId', 'tags']
+        fields = ['issueId', 'title', 'status', 'discarded', 'observation', 'repoName', 'createdAt', 'closedAt', 'labels', 'repositoryId', 'tags', 'htmlUrl']
 
 class GitConfigSerializer(serializers.ModelSerializer):
     class Meta:
