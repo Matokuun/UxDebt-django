@@ -14,6 +14,7 @@ from django.conf import settings
 import requests
 from django.core.paginator import Paginator
 from datetime import datetime
+import openpyxl
 
 class RepositoryViewSet(viewsets.ModelViewSet):
     queryset = Repository.objects.all()
@@ -194,6 +195,75 @@ class IssueViewSet(viewsets.ModelViewSet):
             'next': page_obj.has_next(),
             'previous': page_obj.has_previous(),
         })
+    
+    @action(detail=False, methods=['post'], url_path='GetFile')
+    def GetFile(self, request, *args, **kwargs):
+        filter_data = request.data
+        queryset = Issue.objects.all()
+
+        if filter_data.get('Title'):
+            queryset = queryset.filter(title__icontains=filter_data['Title'])
+        
+        if filter_data.get('Status') is not None:
+            queryset = queryset.filter(status=filter_data['Status'])
+
+        if filter_data.get('Discarded') is not None:
+            queryset = queryset.filter(discarded=filter_data['Discarded'])
+
+        if filter_data.get('RepositoryId'):
+            queryset = queryset.filter(repository_id__in=filter_data['RepositoryId'])
+
+        if filter_data.get('Tags'):
+            queryset = queryset.filter(tags__tagId__in=filter_data['Tags']).distinct()
+
+        if filter_data.get('startDate') and filter_data.get('endDate'):
+            try:
+                start_date = datetime.fromisoformat(filter_data['startDate'].replace('Z', '+00:00'))
+                end_date = datetime.fromisoformat(filter_data['endDate'].replace('Z', '+00:00'))
+                queryset = queryset.filter(created_at__range=[start_date, end_date])
+            except ValueError:
+                return Response({'error': 'Formato de fecha inválido. Esperado: YYYY-MM-DDTHH:MM:SSZ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        elif filter_data.get('startDate'):
+            try:
+                start_date = datetime.fromisoformat(filter_data['startDate'].replace('Z', '+00:00'))
+                queryset = queryset.filter(created_at__gte=start_date)
+            except ValueError:
+                return Response({'error': 'Formato de fecha inválido. Esperado: YYYY-MM-DDTHH:MM:SSZ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        elif filter_data.get('endDate'):
+            try:
+                end_date = datetime.fromisoformat(filter_data['endDate'].replace('Z', '+00:00'))
+                queryset = queryset.filter(created_at__lte=end_date)
+            except ValueError:
+                return Response({'error': 'Formato de fecha inválido. Esperado: YYYY-MM-DDTHH:MM:SSZ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order_by = filter_data.get('OrderBy', 'created_at')
+        queryset = queryset.order_by(order_by)
+
+        serializer = GetIssueViewModelSerializer(queryset, many=True)
+        data = serializer.data
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        date= datetime.now().strftime("%d/%m/%Y_%H:%M")
+        filename = f'issues_{date}'
+        ws.title = filename
+
+        if data:
+            headers = list(data[0].keys())
+            ws.append(headers)
+
+            for item in data:
+                row = [str(item[h]) if isinstance(item[h], (dict, list)) else item[h] for h in headers]
+                ws.append(row)
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename={filename}.xlsx'
+        wb.save(response)
+        return response
     
     @action(detail=False, methods=['put'], url_path='Update/(?P<id>\d+)')
     def Update(self, request, id=None):
