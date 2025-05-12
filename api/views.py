@@ -246,9 +246,7 @@ class IssueViewSet(viewsets.ModelViewSet):
         
         wb = openpyxl.Workbook()
         ws = wb.active
-        date= datetime.now().strftime("%d/%m/%Y_%H:%M")
-        filename = f'issues_{date}'
-        ws.title = filename
+        ws.title = "Issues filtrados"
 
         if data:
             headers = list(data[0].keys())
@@ -261,7 +259,7 @@ class IssueViewSet(viewsets.ModelViewSet):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename={filename}.xlsx'
+        response['Content-Disposition'] = 'attachment; filename=issues_filtrados.xlsx'
         wb.save(response)
         return response
     
