@@ -253,7 +253,7 @@ class IssueViewSet(viewsets.ModelViewSet):
             ws.append(headers)
 
             for item in data:
-                row = [str(item[h]) if isinstance(item[h], (dict, list)) else item[h] for h in headers]
+                row = [", ".join(d["name"] for d in item[h] if isinstance(d, dict) and "name" in d) if isinstance(item[h], list) and all(isinstance(d, dict) for d in item[h]) else item[h]["name"] if isinstance(item[h], dict) and "name" in item[h] else str(item[h]) if isinstance(item[h], (dict, list)) else item[h] for h in headers]
                 ws.append(row)
 
         response = HttpResponse(
