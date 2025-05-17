@@ -37,6 +37,7 @@ class Issue(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     observation = models.TextField(null=True, blank=True)
+    body = models.TextField(null=True, blank=True)
 
     repository = models.ForeignKey('Repository', on_delete=models.CASCADE, related_name='issues')
     tags = models.ManyToManyField(Tag, through='IssueTag')

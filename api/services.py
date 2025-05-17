@@ -88,6 +88,7 @@ class GitService:
             if existing_issue:
                 existing_issue.title = issue_data['title']
                 existing_issue.html_url = issue_data['html_url']
+                existing_issue.body= issue_data['body']
                 existing_issue.status = status
                 existing_issue.labels = ', '.join([label['name'] for label in issue_data.get('labels', [])])
                 existing_issue.closed_at = issue_data.get('closed_at')
@@ -99,7 +100,8 @@ class GitService:
                     title=issue_data['title'],
                     status=status,
                     labels=', '.join([label['name'] for label in issue_data.get('labels', [])]),
-                    repository=new_repo
+                    repository=new_repo,
+                    body=issue_data['body']
                 )
                 new_issue.save()
 
@@ -126,6 +128,7 @@ class GitService:
                     existing_issue.title = issue_data['title']
                     existing_issue.html_url = issue_data['html_url']
                     existing_issue.status = status
+                    existing_issue.body= issue_data['body']
                     existing_issue.labels = ', '.join([label['name'] for label in issue_data.get('labels', [])])
                     existing_issue.closed_at = issue_data.get('closed_at')
                     existing_issue.save()
@@ -136,7 +139,8 @@ class GitService:
                         title=issue_data['title'],
                         status=status,
                         labels=', '.join([label['name'] for label in issue_data.get('labels', [])]),
-                        repository=repo
+                        repository=repo,
+                        body=issue_data['body']
                     )
                     new_issue.save()
 

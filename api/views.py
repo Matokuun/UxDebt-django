@@ -14,7 +14,8 @@ from django.conf import settings
 import requests
 from django.core.paginator import Paginator
 from datetime import datetime
-import openpyxl
+import csv
+from io import StringIO
 
 class RepositoryViewSet(viewsets.ModelViewSet):
     queryset = Repository.objects.all()
@@ -244,23 +245,27 @@ class IssueViewSet(viewsets.ModelViewSet):
         serializer = GetIssueViewModelSerializer(queryset, many=True)
         data = serializer.data
         
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Issues filtrados"
+        csv_buffer = StringIO()
+        writer = csv.writer(csv_buffer)
 
-        if data:
-            headers = list(data[0].keys())
-            ws.append(headers)
+        headers = list(data[0].keys())
+        writer.writerow(headers)
 
-            for item in data:
-                row = [", ".join(d["name"] for d in item[h] if isinstance(d, dict) and "name" in d) if isinstance(item[h], list) and all(isinstance(d, dict) for d in item[h]) else item[h]["name"] if isinstance(item[h], dict) and "name" in item[h] else str(item[h]) if isinstance(item[h], (dict, list)) else item[h] for h in headers]
-                ws.append(row)
+        for item in data:
+            row = [
+                ", ".join(d["name"] for d in item[h] if isinstance(d, dict) and "name" in d)
+                if isinstance(item[h], list) and all(isinstance(d, dict) for d in item[h])
+                else item[h]["name"]
+                if isinstance(item[h], dict) and "name" in item[h]
+                else str(item[h]) if isinstance(item[h], (dict, list))
+                else item[h]
+                for h in headers
+            ]
+            writer.writerow(row)
 
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = 'attachment; filename=issues_filtrados.xlsx'
-        wb.save(response)
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename=issues_filtrados.csv'
+        response.write(csv_buffer.getvalue())
         return response
     
     @action(detail=False, methods=['put'], url_path='Update/(?P<id>\d+)')
