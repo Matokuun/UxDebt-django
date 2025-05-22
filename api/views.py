@@ -289,19 +289,70 @@ class IssueViewSet(viewsets.ModelViewSet):
     def ImportIssue(self, request, *args, **kwargs):
         file = request.FILES.get('file')
         print(f"Archivo recibido: {file.name}")
+        errores= 0
         if not file:
             return Response({"error": "No file uploaded."}, status=400)
 
         try:
             # Leemos el contenido del archivo CSV
-            file_data = file.read().decode('utf-8')  # Decodificamos a texto
+            file_data = file.read().decode('utf-8')  # Decodificamos a texto, VER SI ME SIRVE ESTA DECODIFICACION (hay caracteres especiales)
             csv_reader = csv.reader(io.StringIO(file_data))
 
-            # Imprimimos línea por línea
-            for row in csv_reader:
-                print([str(cell).encode('ascii', 'ignore').decode('ascii') for cell in row])
+            # Para comprobar que se imprima correctamente todo el csv. Se imprime y cada fila es un []
+            # for row in csv_reader:
+            #    print([str(cell).encode('ascii', 'ignore').decode('ascii') for cell in row])
+            #for row in csv_reader:
+            #    print(row[1]) #title
+            #    print(row[10]) #tags
+            #    print(row[11]) #htmlUrl
+            #    print("--------")
+            #YA NOS ANDA, AHORA TENEMOS QUE ARMAR EL ISSUE. PARA EL TAG, PASAR TODO A MAYUSCULAS Y DESPUES EN CASO QUE NO EXISTA CREAR EL TAG. SI NO, CONECTARLO CON EL TAG QUE YA EXISTE. REPOSITORY_ID, IGNORAR POR AHORA.
+            for idx, row in enumerate(csv_reader):
+                try:
+                    if (row[1]) == "title":
+                        continue
+                    title= row[1]
+                    htmlUrl= row[11]
+                    issue = Issue.objects.filter(html_url=htmlUrl).first()
 
-            return Response({"message": "Archivo recibido y leído correctamente."})
+                    if issue: #actualizar datos del issue que ya existe
+                        print(f"Issue {title} - existe")
+                        issue.status = row[2] == 'True'
+                        issue.discarded = row[3] == 'True'
+                        issue.observation = row[4]
+                        issue.labels = row[8]
+                        issue.body = row[12]
+                        issue.save()
+                    else: #crear issue
+                        print(f"Issue {title} - NO existe")
+                        issue = Issue.objects.create(
+                            title=title,
+                            status=row[2] == 'True',
+                            discarded=row[3] == 'True',
+                            observation=row[4],
+                            labels=row[8],
+                            body=row[12],
+                            html_url=htmlUrl
+                        )
+
+                    tag = Tag.objects.filter(name__iexact=row[10]).first()
+                    if not tag:
+                        tag = Tag.objects.create(name=row[10])
+                        print("TAG NUEVO")
+                    else:
+                        print("EXISTE EL TAG")
+                    IssueTag.objects.get_or_create(issue=issue, tag=tag)
+                    
+
+                except Exception as e:
+                    print(f"Error en línea {idx}: {e}")
+                    errores= errores + 1
+                    continue
+
+            if(errores == 0):
+                return Response({"message": "Archivo recibido y leído correctamente."})
+            else:
+                return Response({"message": "Hubo errores durante la importación de issues"}, status=500)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
     
