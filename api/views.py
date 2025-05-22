@@ -1,3 +1,4 @@
+import io
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -245,28 +246,64 @@ class IssueViewSet(viewsets.ModelViewSet):
         serializer = GetIssueViewModelSerializer(queryset, many=True)
         data = serializer.data
         
-        csv_buffer = StringIO()
-        writer = csv.writer(csv_buffer)
+        csv_buffer = StringIO(newline='')
+        writer = csv.writer(csv_buffer, quoting=csv.QUOTE_MINIMAL)
 
         headers = list(data[0].keys())
         writer.writerow(headers)
 
         for item in data:
-            row = [
-                ", ".join(d["name"] for d in item[h] if isinstance(d, dict) and "name" in d)
-                if isinstance(item[h], list) and all(isinstance(d, dict) for d in item[h])
-                else item[h]["name"]
-                if isinstance(item[h], dict) and "name" in item[h]
-                else str(item[h]) if isinstance(item[h], (dict, list))
-                else item[h]
-                for h in headers
-            ]
+            row = []
+            for h in headers:
+                val = item.get(h)
+
+                # Si es una lista de dicts con 'name'
+                if isinstance(val, list) and all(isinstance(d, dict) and "name" in d for d in val):
+                    cell = ", ".join(d["name"] for d in val)
+
+                # Si es un dict con 'name'
+                elif isinstance(val, dict) and "name" in val:
+                    cell = val["name"]
+
+                # Si es un dict o lista (sin estructura clara)
+                elif isinstance(val, (dict, list)):
+                    cell = str(val)
+
+                # Si es un string (posiblemente el campo body)
+                elif isinstance(val, str):
+                    cell = val.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ').replace(';',',').strip()
+
+                # Otros valores simples
+                else:
+                    cell = val
+
+                row.append(cell)
             writer.writerow(row)
 
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename=issues_filtrados.csv'
         response.write(csv_buffer.getvalue())
         return response
+    
+    @action(detail=False, methods=['post'], url_path='ImportIssues')
+    def ImportIssue(self, request, *args, **kwargs):
+        file = request.FILES.get('file')
+        print(f"Archivo recibido: {file.name}")
+        if not file:
+            return Response({"error": "No file uploaded."}, status=400)
+
+        try:
+            # Leemos el contenido del archivo CSV
+            file_data = file.read().decode('utf-8')  # Decodificamos a texto
+            csv_reader = csv.reader(io.StringIO(file_data))
+
+            # Imprimimos línea por línea
+            for row in csv_reader:
+                print([str(cell).encode('ascii', 'ignore').decode('ascii') for cell in row])
+
+            return Response({"message": "Archivo recibido y leído correctamente."})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
     
     @action(detail=False, methods=['put'], url_path='Update/(?P<id>\d+)')
     def Update(self, request, id=None):

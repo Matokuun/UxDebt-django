@@ -28,7 +28,7 @@ class Tag(models.Model):
     
 class Issue(models.Model):
     issue_id = models.AutoField(primary_key=True)
-    git_id = models.BigIntegerField(unique=True)
+    git_id = models.BigIntegerField(unique=True, null=True, blank=True)
     html_url = models.URLField()
     status = models.BooleanField(default=True)
     title = models.CharField(max_length=255)
@@ -39,7 +39,7 @@ class Issue(models.Model):
     observation = models.TextField(null=True, blank=True)
     body = models.TextField(null=True, blank=True)
 
-    repository = models.ForeignKey('Repository', on_delete=models.CASCADE, related_name='issues')
+    repository = models.ForeignKey('Repository', on_delete=models.CASCADE, related_name='issues', null=True, blank=True)
     tags = models.ManyToManyField(Tag, through='IssueTag')
 
     class Meta:
