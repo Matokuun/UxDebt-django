@@ -297,16 +297,6 @@ class IssueViewSet(viewsets.ModelViewSet):
             # Leemos el contenido del archivo CSV
             file_data = file.read().decode('utf-8')  # Decodificamos a texto, VER SI ME SIRVE ESTA DECODIFICACION (hay caracteres especiales)
             csv_reader = csv.reader(io.StringIO(file_data))
-
-            # Para comprobar que se imprima correctamente todo el csv. Se imprime y cada fila es un []
-            # for row in csv_reader:
-            #    print([str(cell).encode('ascii', 'ignore').decode('ascii') for cell in row])
-            #for row in csv_reader:
-            #    print(row[1]) #title
-            #    print(row[10]) #tags
-            #    print(row[11]) #htmlUrl
-            #    print("--------")
-            #YA NOS ANDA, AHORA TENEMOS QUE ARMAR EL ISSUE. PARA EL TAG, PASAR TODO A MAYUSCULAS Y DESPUES EN CASO QUE NO EXISTA CREAR EL TAG. SI NO, CONECTARLO CON EL TAG QUE YA EXISTE. REPOSITORY_ID, IGNORAR POR AHORA.
             for idx, row in enumerate(csv_reader):
                 try:
                     if (row[1]) == "title":
@@ -314,7 +304,6 @@ class IssueViewSet(viewsets.ModelViewSet):
                     title= row[1]
                     htmlUrl= row[11]
                     issue = Issue.objects.filter(html_url=htmlUrl).first()
-
                     if issue: #actualizar datos del issue que ya existe
                         print(f"Issue {title} - existe")
                         issue.status = row[2] == 'True'
@@ -323,18 +312,41 @@ class IssueViewSet(viewsets.ModelViewSet):
                         issue.labels = row[8]
                         issue.body = row[12]
                         issue.save()
-                    else: #crear issue
+                    else: 
+                        #Mirar si existe el repo en la bd. Si existe entonces actualizo su repo (actualmente nomas creo un issue y le enlazo el repo existente). Si no existe entonces traerlo. En ambos casos luego actualizar el issue.
                         print(f"Issue {title} - NO existe")
-                        issue = Issue.objects.create(
-                            title=title,
-                            status=row[2] == 'True',
-                            discarded=row[3] == 'True',
-                            observation=row[4],
-                            labels=row[8],
-                            body=row[12],
-                            html_url=htmlUrl
-                        )
-
+                        owner_name= htmlUrl.split('/')[3]
+                        repo_name= htmlUrl.split('/')[4]
+                        repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
+                        git_service = GitService()
+                        if repo:
+                            print(f"repositorio {repo_name} de {owner_name} existe: actualizo repositorio")
+                            #actualizo repo
+                            #git_service.update_repository(repo.repository_id)
+                            #issue = Issue.objects.filter(html_url=htmlUrl).first()
+                            #issue.discarded = row[3] == 'True'
+                            #issue.observation = row[4]
+                            #issue.save()
+                            issue = Issue.objects.create(
+                                title=title,
+                                status=row[2] == 'True',
+                                discarded=row[3] == 'True',
+                                observation=row[4],
+                                labels=row[8],
+                                body=row[12],
+                                html_url=htmlUrl,
+                                repository= repo
+                            )
+                        else:
+                            print(f"repositorio {repo_name} de {owner_name} no existe: agregando nuevo repositorio con sus issues")
+                            #traer el nuevo
+                            git_service.download_new_repository(owner_name, repo_name)
+                            repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
+                            issue = Issue.objects.filter(html_url=htmlUrl).first()
+                            issue.discarded = row[3] == 'True'
+                            issue.observation = row[4]
+                            issue.save()
+                    #Analisis del tag del issue: Existe en la base de datos local, no existe (crearlo entonces)
                     tag = Tag.objects.filter(name__iexact=row[10]).first()
                     if not tag:
                         tag = Tag.objects.create(name=row[10])
@@ -342,10 +354,9 @@ class IssueViewSet(viewsets.ModelViewSet):
                     else:
                         print("EXISTE EL TAG")
                     IssueTag.objects.get_or_create(issue=issue, tag=tag)
-                    
 
                 except Exception as e:
-                    print(f"Error en línea {idx}: {e}")
+                    print(f"Error en linea {idx}: {e}")
                     errores= errores + 1
                     continue
 
