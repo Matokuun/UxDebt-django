@@ -1,0 +1,13 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: issue-tracker-api
+spec:
+  rules:
+    - host: issue-tracker-api.okd.lifia.info.unlp.edu.ar
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: issue-tracker-api
+              servicePort: 8000

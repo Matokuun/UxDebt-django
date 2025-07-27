@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: issue-tracker-api
+  labels:
+    app: issue-tracker-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: issue-tracker-api
+  template:
+    metadata:
+      labels:
+        app: issue-tracker-api
+    spec:
+      containers:
+        - name: issue-tracker-api
+          image: matomaniaco/issue-tracker-images:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_NAME 
+              value: "uxdebt"  
+            - name: DB_PASS
+              value: "root"  
+            - name: DB_USER
+              value: "postgres"  
+            - name: DB_HOST
+              value: "issue-tracker-db"
+            - name: DB_PORT
+              value: "5432"

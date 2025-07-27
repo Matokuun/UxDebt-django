@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: issue-tracker-db
+spec:
+  podManagementPolicy: Parallel
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: issue-tracker-db
+  serviceName: issue-tracker-db
+  template:
+    metadata:
+      labels:
+        app: issue-tracker-db
+    spec:
+      containers:
+        - name: issue-tracker-db
+          image: postgres:15
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: "root"
+            - name: POSTGRES_DB
+              value: "uxdebt"
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: issue-tracker-db
+            - mountPath: /docker-entrypoint-initdb.d
+              name: init-volume
+      volumes:
+        - name: init-volume
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: issue-tracker-db
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

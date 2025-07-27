@@ -1,0 +1,15 @@
+kind: Service
+apiVersion: v1
+metadata:  
+  name: issue-tracker-db
+spec:
+  ports:    
+    - name: issue-tracker-db
+      protocol: TCP
+      port: 5432
+      targetPort: 5432    
+  selector:
+    app: issue-tracker-db
+  clusterIP: None  
+  type: ClusterIP
+  sessionAffinity: None

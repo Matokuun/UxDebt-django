@@ -1,0 +1,35 @@
+# Entorno virtual
+venv/
+env/
+.venv/
+
+# Archivos de Python compilados
+api/__pycache__/
+uxdebt/__pycache__/
+*.py[cod]
+*.so
+
+# Base de datos local
+*.sqlite3
+
+# Archivos de configuración local
+#.env
+
+# Archivos y carpetas de logs
+*.log
+*.pot
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de migración rotos (opcional)
+*.pyc
+api/migrations/__pycache__/
+
+# Carpeta del IDE/editor
+.vscode/
+.idea/
+
+# Docker
+docker-compose.override.yml
