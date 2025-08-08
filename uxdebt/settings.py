@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-b)ww+kmy^*!0y)zq=bv$5uki&-@6ew3p7wepgy^$@ajn@16l9)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', 'issue-tracker-api.okd.lifia.info.unlp.edu.ar']
 
 
 # Application definition
