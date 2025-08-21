@@ -26,18 +26,14 @@ spec:
             - name: POSTGRES_USER
               value: "postgres"
             - name: POSTGRES_PASSWORD
-              value: "root"
+              value: "postgres"
             - name: POSTGRES_DB
               value: "uxdebt"
+            - name: PGDATA
+              value: /data/db
           volumeMounts:
-            - mountPath: /var/lib/postgresql/data
+            - mountPath: /data
               name: issue-tracker-db
-            - mountPath: /docker-entrypoint-initdb.d
-              name: init-volume
-      volumes:
-        - name: init-volume
-          configMap:
-            name: postgres-init
   volumeClaimTemplates:
     - metadata:
         name: issue-tracker-db

@@ -23,8 +23,8 @@ spec:
           env:
             - name: DB_NAME 
               value: "uxdebt"  
-            - name: DB_PASS
-              value: "root"  
+            - name: DB_PASSWORD
+              value: "postgres"  
             - name: DB_USER
               value: "postgres"  
             - name: DB_HOST
