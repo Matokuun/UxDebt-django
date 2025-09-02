@@ -61,7 +61,7 @@ class GetIssueViewModelSerializer(serializers.ModelSerializer):
     status = serializers.CharField()
     discarded = serializers.BooleanField()
     observation = serializers.CharField(allow_null=True)
-    repoName = serializers.CharField(source='repository.name')
+    repoName = serializers.CharField(source='repository.name', default=None)
     createdAt = serializers.DateTimeField(source='created_at')
     closedAt = serializers.DateTimeField(source='closed_at', allow_null=True)
     labels = serializers.JSONField()

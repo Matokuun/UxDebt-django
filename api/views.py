@@ -285,6 +285,46 @@ class IssueViewSet(viewsets.ModelViewSet):
         response.write(csv_buffer.getvalue())
         return response
     
+    @action(detail=False, methods=['post'], url_path='newIssue')
+    def createIssue(self, request, *args, **kwargs):
+        try:
+            title = request.data.get('title')
+            body = request.data.get('body', None)
+            tag_name = request.data.get('tag', None)
+
+            if not title:
+                return Response({'error': 'El campo title es obligatorio.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if body and title:
+                issue, created = Issue.objects.get_or_create(
+                    title=title,
+                    body=body,
+                    defaults={
+                        'html_url': None,
+                        'repository': None,
+                        'git_id': None
+                    }
+                )
+            else:
+                issue = Issue.objects.create(
+                    title=title,
+                    body=body,
+                    html_url=None,
+                    repository=None,
+                    git_id=None
+                )
+
+            # Asocio el tag si viene
+            if tag_name:
+                tag, _ = Tag.objects.get_or_create(name=tag_name)
+                IssueTag.objects.get_or_create(issue=issue, tag=tag)
+
+            serializer = IssueSerializer(issue)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['post'], url_path='ImportIssues')
     def ImportIssue(self, request, *args, **kwargs):
         file = request.FILES.get('file')
@@ -313,7 +353,7 @@ class IssueViewSet(viewsets.ModelViewSet):
                         issue.body = row[12]
                         issue.save()
                     else: 
-                        #Mirar si existe el repo en la bd. Si existe entonces actualizo su repo (actualmente nomas creo un issue y le enlazo el repo existente). Si no existe entonces traerlo. En ambos casos luego actualizar el issue.
+                        #Mirar si existe el repo en la bd. Si existe entonces actualizo su repo. Si no existe entonces traerlo. En ambos casos luego actualizar el issue.
                         print(f"Issue {title} - NO existe")
                         owner_name= htmlUrl.split('/')[3]
                         repo_name= htmlUrl.split('/')[4]
@@ -338,14 +378,23 @@ class IssueViewSet(viewsets.ModelViewSet):
                                 repository= repo
                             )
                         else:
-                            print(f"repositorio {repo_name} de {owner_name} no existe: agregando nuevo repositorio con sus issues")
-                            #traer el nuevo
-                            git_service.download_new_repository(owner_name, repo_name)
-                            repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
-                            issue = Issue.objects.filter(html_url=htmlUrl).first()
-                            issue.discarded = row[3] == 'True'
-                            issue.observation = row[4]
-                            issue.save()
+                            #analizo si es un issue manual o si tiene repo pero no esta en el sistema (entonces lo traigo)
+                            if htmlUrl:
+                                print(f"repositorio {repo_name} de {owner_name} no existe: agregando nuevo repositorio con sus issues")
+                                #traer el nuevo
+                                git_service.download_new_repository(owner_name, repo_name)
+                                repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
+                                issue = Issue.objects.filter(html_url=htmlUrl).first()
+                                issue.discarded = row[3] == 'True'
+                                issue.observation = row[4]
+                                issue.save()
+                            else:
+                                issue = Issue.objects.create(
+                                    title=title,
+                                    discarded=row[3] == 'True',
+                                    observation=row[4],
+                                    body=row[12]
+                                )
                     #Analisis del tag del issue: Existe en la base de datos local, no existe (crearlo entonces)
                     tag = Tag.objects.filter(name__iexact=row[10]).first()
                     if not tag:

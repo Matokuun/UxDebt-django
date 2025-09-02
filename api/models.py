@@ -29,7 +29,7 @@ class Tag(models.Model):
 class Issue(models.Model):
     issue_id = models.AutoField(primary_key=True)
     git_id = models.BigIntegerField(unique=True, null=True, blank=True)
-    html_url = models.URLField()
+    html_url = models.URLField(null=True, blank=True)
     status = models.BooleanField(default=True)
     title = models.CharField(max_length=255)
     discarded = models.BooleanField(default=False)
