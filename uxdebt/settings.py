@@ -82,11 +82,11 @@ WSGI_APPLICATION = 'uxdebt.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME'),
-        'USER': os.environ.get('DB_USER'),
-        'PASSWORD': os.environ.get('DB_PASSWORD'),
-        'HOST': os.environ.get('DB_HOST'),
-        'PORT': os.environ.get('DB_PORT'),
+        'NAME': os.environ.get('DB_NAME','uxdebt'), #sacar los valores por defectos en producción
+        'USER': os.environ.get('DB_USER','postgres'), 
+        'PASSWORD': os.environ.get('DB_PASSWORD','root'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
