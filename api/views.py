@@ -361,7 +361,7 @@ class IssueViewSet(viewsets.ModelViewSet):
                         git_service = GitService()
                         if repo:
                             print(f"repositorio {repo_name} de {owner_name} existe: actualizo repositorio")
-                            #actualizo repo
+                            #actualizo repo (actualmente no se usa, pero puede servir en un futuro)
                             #git_service.update_repository(repo.repository_id)
                             #issue = Issue.objects.filter(html_url=htmlUrl).first()
                             #issue.discarded = row[3] == 'True'
@@ -380,14 +380,20 @@ class IssueViewSet(viewsets.ModelViewSet):
                         else:
                             #analizo si es un issue manual o si tiene repo pero no esta en el sistema (entonces lo traigo)
                             if htmlUrl:
-                                print(f"repositorio {repo_name} de {owner_name} no existe: agregando nuevo repositorio con sus issues")
+                                print(f"repositorio {repo_name} de {owner_name} no existe: agregando nuevo repositorio")
                                 #traer el nuevo
-                                git_service.download_new_repository(owner_name, repo_name)
+                                git_service.register_new_repository(owner_name, repo_name)
                                 repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
-                                issue = Issue.objects.filter(html_url=htmlUrl).first()
-                                issue.discarded = row[3] == 'True'
-                                issue.observation = row[4]
-                                issue.save()
+                                issue = Issue.objects.create(
+                                    title=title,
+                                    status=row[2] == 'True',
+                                    discarded=row[3] == 'True',
+                                    observation=row[4],
+                                    labels=row[8],
+                                    body=row[12],
+                                    html_url=htmlUrl,
+                                    repository=repo
+                                )
                             else:
                                 issue = Issue.objects.create(
                                     title=title,

@@ -111,6 +111,47 @@ class GitService:
             "message": "Repository and issues downloaded successfully",
             "data": issues_result['data']
         }
+    
+    def register_new_repository(self, owner, repository):
+        repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}'
+
+        token = self._get_github_token()
+        repo_response = requests.get(repo_url, headers={'Authorization': f'token {token}'})
+
+        if repo_response.status_code != 200:
+            return {
+                "is_success": False,
+                "response_code": repo_response.status_code,
+                "message": "No se encontró el repositorio ingresado",
+                "data": None
+            }
+
+        repo_data = repo_response.json()
+        print('repositorio: ', repo_data['html_url'], repo_data['id'])
+        print('repositorio: ', owner, repository)
+        existing_repo = Repository.objects.filter(owner=owner, name=repository).first()
+
+        if existing_repo:
+            existing_repo.git_id = repo_data['id']
+            existing_repo.html_url = repo_data['html_url']
+            existing_repo.description = repo_data.get('description', '')
+            existing_repo.save()
+        else:
+            new_repo = Repository(
+                owner=owner,
+                name=repository,
+                git_id=repo_data['id'],
+                html_url=repo_data['html_url'],
+                description=repo_data.get('description', '')
+            )
+            new_repo.save()
+
+        return {
+            "is_success": True,
+            "response_code": 200,
+            "message": "Repository registered successfully",
+            "data": repository
+        }
 
     def update_repository(self, repository_id):
         try:
