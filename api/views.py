@@ -30,11 +30,15 @@ class RepositoryViewSet(viewsets.ModelViewSet):
     def Create(self, request, *args, **kwargs):
         owner = request.data.get('owner')
         name = request.data.get('name')
+        labels = request.data.get("labels", None)
+        print(labels)
+        if not isinstance(labels, list):
+            labels = []
 
         if not owner or not name:
             return Response({'error': 'Propietario y Repositorio son campos requeridos.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if Repository.objects.filter(name=name, owner=owner).exists():
+        if Repository.objects.filter(name=name, owner=owner).exists(): #ver despues el caso en el que se edita el label
             return Response(
                 {'error': 'El repositorio ingresado ya existe'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -43,7 +47,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         git_service = GitService()
 
         try:
-            issues = git_service.download_new_repository(owner, name)
+            issues = git_service.download_new_repository(owner, name, labels)
 
             if not issues['is_success']:
                 return Response(

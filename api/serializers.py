@@ -7,10 +7,13 @@ class RepositoryCreateSerializer(serializers.ModelSerializer):
     gitId = serializers.IntegerField(source='git_id')
     htmlUrl = serializers.URLField(source='html_url')
     description = serializers.CharField(allow_null=True)
+    labels = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
 
     class Meta:
         model = Repository
-        fields = ['owner', 'name', 'gitId', 'htmlUrl', 'description']
+        fields = ['owner', 'name', 'gitId', 'htmlUrl', 'description', 'labels']
 
 class RepositoryGetAllSerializer(serializers.ModelSerializer):
     owner = serializers.CharField()

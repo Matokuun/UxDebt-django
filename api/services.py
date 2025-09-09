@@ -11,7 +11,7 @@ class GitService:
         except GitHubToken.DoesNotExist:
             raise ValueError("No GitHub token found in the database.")
 
-    def _fetch_all_issues(self, owner, repository):
+    def _fetch_all_issues(self, owner, repository, labels=None):
         issues_data = []
         page = 1
         per_page = 30
@@ -19,9 +19,22 @@ class GitService:
         token = self._get_github_token()
         headers = {'Authorization': f'token {token}'}
 
+        if not isinstance(labels, list):
+            labels = []
+
         while True:
-            issues_url = f'{self.BASE_URL}/repos/{owner}/{repository}/issues?page={page}&per_page={per_page}'
-            issues_response = requests.get(issues_url, headers=headers)
+            issues_url = f'{self.BASE_URL}/repos/{owner}/{repository}/issues'
+            params = {
+                'page': page,
+                'per_page': per_page
+            }
+            
+            if labels:
+                params['labels'] = ",".join(labels)
+
+            print(params['labels'])
+
+            issues_response = requests.get(issues_url, headers=headers, params=params)
 
             if issues_response.status_code != 200:
                 return {
@@ -43,8 +56,8 @@ class GitService:
             "data": issues_data
         }
 
-    def download_new_repository(self, owner, repository):
-        repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}'
+    def download_new_repository(self, owner, repository, labels):
+        repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}' #por defecto, trae issues en estado open (en caso de querer cambiarlo, se debe modificar el request a github, con state=all)
 
         token = self._get_github_token()
         repo_response = requests.get(repo_url, headers={'Authorization': f'token {token}'})
@@ -77,7 +90,7 @@ class GitService:
             )
             new_repo.save()
 
-        issues_result = self._fetch_all_issues(owner, repository)
+        issues_result = self._fetch_all_issues(owner, repository, labels)
         if not issues_result['is_success']:
             return issues_result
 
