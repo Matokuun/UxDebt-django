@@ -31,8 +31,9 @@ class GitService:
             
             if labels:
                 params['labels'] = ",".join(labels)
-
-            print(params['labels'])
+                print("Labels enviados a GitHub:", params['labels'])
+            else:
+                print("Labels enviados a GitHub: ninguno")
 
             issues_response = requests.get(issues_url, headers=headers, params=params)
 

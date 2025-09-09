@@ -31,8 +31,19 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         owner = request.data.get('owner')
         name = request.data.get('name')
         labels = request.data.get("labels", None)
-        print(labels)
-        if not isinstance(labels, list):
+        print("Labels recibidos:", labels)
+
+        if labels is None:
+            labels = []
+        elif isinstance(labels, list):
+            normalized = []
+            for item in labels:
+                if isinstance(item, str):
+                    # Divido por coma y limpio espacios
+                    parts = [p.strip() for p in item.split(",") if p.strip()]
+                    normalized.extend(parts)
+            labels = normalized
+        else:
             labels = []
 
         if not owner or not name:

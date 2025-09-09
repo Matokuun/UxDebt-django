@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.fields import ArrayField
 
 class Repository(models.Model):
     repository_id = models.AutoField(primary_key=True)
@@ -7,6 +8,11 @@ class Repository(models.Model):
     git_id = models.IntegerField(unique=True)
     html_url = models.URLField()
     description = models.TextField(null=True, blank=True)
+    labels = ArrayField(
+        models.CharField(max_length=100),
+        blank=True,
+        default=list
+    )
 
     class Meta:
         db_table = 'repository'
