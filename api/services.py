@@ -79,6 +79,7 @@ class GitService:
             existing_repo.git_id = repo_data['id']
             existing_repo.html_url = repo_data['html_url']
             existing_repo.description = repo_data.get('description', '')
+            existing_repo.labels = labels or []
             existing_repo.save()
             new_repo = existing_repo
         else:
@@ -87,7 +88,8 @@ class GitService:
                 name=repository,
                 git_id=repo_data['id'],
                 html_url=repo_data['html_url'],
-                description=repo_data.get('description', '')
+                description=repo_data.get('description', ''),
+                labels=labels or []
             )
             new_repo.save()
 
@@ -148,7 +150,8 @@ class GitService:
         if existing_repo:
             existing_repo.git_id = repo_data['id']
             existing_repo.html_url = repo_data['html_url']
-            existing_repo.description = repo_data.get('description', '')
+            existing_repo.description = repo_data.get('description', ''),
+            existing_repo.labels = []
             existing_repo.save()
         else:
             new_repo = Repository(
@@ -156,7 +159,8 @@ class GitService:
                 name=repository,
                 git_id=repo_data['id'],
                 html_url=repo_data['html_url'],
-                description=repo_data.get('description', '')
+                description=repo_data.get('description', ''),
+                labels= []
             )
             new_repo.save()
 

@@ -22,10 +22,13 @@ class RepositoryGetAllSerializer(serializers.ModelSerializer):
     htmlUrl = serializers.URLField(source='html_url')
     description = serializers.CharField(allow_null=True)
     repositoryId = serializers.IntegerField(source='repository_id')
+    labels = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
 
     class Meta:
         model = Repository
-        fields = ['owner', 'name', 'gitId', 'htmlUrl', 'description', 'repositoryId']
+        fields = ['owner', 'name', 'gitId', 'htmlUrl', 'description', 'repositoryId', 'labels']
 
 
 class TagSerializer(serializers.ModelSerializer):
