@@ -77,6 +77,14 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         serializer = RepositoryGetAllSerializer(repositories, many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['post'], url_path='AddLabel')
+    def add_label_in_repo(self, request, *args, **kwargs):
+        owner = request.data.get('owner')
+        name = request.data.get('name')
+        label = request.data.get("newLabel")
+        print("Label recibidos:", label, ", owner:", owner, ", name del repo: ", name)
+
+
     @action(detail=True, methods=['post'], url_path='UpdateRepository')
     def update_repository(self, request, pk=None):
         try:
@@ -93,6 +101,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
             repo.git_id = repo_data['id']
             repo.html_url = repo_data['html_url']
             repo.description = repo_data.get('description', '')
+            repo.labels = []
             repo.save()
 
             issues_url = f'https://api.github.com/repos/{repo.owner}/{repo.name}/issues'
