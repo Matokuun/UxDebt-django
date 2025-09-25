@@ -56,6 +56,44 @@ class GitService:
             "is_success": True,
             "data": issues_data
         }
+    
+    def _fetch_issues_for_label(self, owner, repository, label):
+        issues_data = []
+        page = 1
+        per_page = 30
+
+        token = self._get_github_token()
+        headers = {'Authorization': f'token {token}'}
+
+        while True:
+            issues_url = f'{self.BASE_URL}/repos/{owner}/{repository}/issues'
+            params = {
+                'page': page,
+                'per_page': per_page,
+                'labels': label
+            }
+            
+            issues_response = requests.get(issues_url, headers=headers, params=params)
+
+            if issues_response.status_code != 200:
+                return {
+                    "is_success": False,
+                    "response_code": issues_response.status_code,
+                    "message": "Error al obtener los issues",
+                    "data": None
+                }
+
+            page_issues_data = issues_response.json()
+            if not page_issues_data:
+                break
+
+            issues_data.extend(page_issues_data)
+            page += 1
+
+        return {
+            "is_success": True,
+            "data": issues_data
+        }
 
     def download_new_repository(self, owner, repository, labels):
         repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}' #por defecto, trae issues en estado open (en caso de querer cambiarlo, se debe modificar el request a github, con state=all)
@@ -171,11 +209,14 @@ class GitService:
             "data": repository
         }
 
-    def update_repository(self, repository_id):
+    def update_repository(self, repository_id, label=None):
         try:
             repo = Repository.objects.get(repository_id=repository_id)
-
-            issues_result = self._fetch_all_issues(repo.owner, repo.name)
+            if label is None:
+                issues_result = self._fetch_all_issues(repo.owner, repo.name)
+            else:
+                issues_result = self._fetch_issues_for_label(repo.owner, repo.name, label)
+                
             if not issues_result['is_success']:
                 return issues_result
 

@@ -79,11 +79,25 @@ class RepositoryViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='AddLabel')
     def add_label_in_repo(self, request, *args, **kwargs):
-        owner = request.data.get('owner')
-        name = request.data.get('name')
+        id_repo = request.data.get('id')
         label = request.data.get("newLabel")
-        print("Label recibidos:", label, ", owner:", owner, ", name del repo: ", name)
+        print("Label recibido:", label, ", id del repo:", id_repo)
 
+        git_service = GitService()
+
+        try:
+            issues = git_service.update_repository(id_repo, label)
+
+            if not issues['is_success']:
+                return Response(
+                    {"error": issues['message']},
+                    status=issues['response_code']
+                )
+            #agregar label aqui, en la lista de labels de la bd
+            return Response(issues, status=status.HTTP_200_OK)
+        
+        except Exception as ex:
+            return Response({"error": str(ex)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], url_path='UpdateRepository')
     def update_repository(self, request, pk=None):
