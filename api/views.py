@@ -93,7 +93,6 @@ class RepositoryViewSet(viewsets.ModelViewSet):
                     {"error": issues['message']},
                     status=issues['response_code']
                 )
-            #agregar label aqui, en la lista de labels de la bd
             return Response(issues, status=status.HTTP_200_OK)
         
         except Exception as ex:

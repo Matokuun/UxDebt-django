@@ -134,7 +134,8 @@ class GitService:
         issues_result = self._fetch_all_issues(owner, repository, labels)
         if not issues_result['is_success']:
             return issues_result
-
+        
+        new_issues_count = 0
         for issue_data in issues_result['data']:
             existing_issue = Issue.objects.filter(git_id=issue_data['id']).first()
             status = issue_data['state'] == 'open'
@@ -158,12 +159,14 @@ class GitService:
                     body=issue_data['body']
                 )
                 new_issue.save()
+                new_issues_count += 1
 
         return {
             "is_success": True,
             "response_code": 200,
             "message": "Repository and issues downloaded successfully",
-            "data": issues_result['data']
+            "data": issues_result['data'],
+            "new_issues": new_issues_count
         }
     
     def register_new_repository(self, owner, repository):
@@ -220,6 +223,7 @@ class GitService:
             if not issues_result['is_success']:
                 return issues_result
 
+            new_issues_count = 0
             for issue_data in issues_result['data']:
                 existing_issue = Issue.objects.filter(git_id=issue_data['id']).first()
                 status = issue_data['state'] == 'open'
@@ -243,12 +247,22 @@ class GitService:
                         body=issue_data['body']
                     )
                     new_issue.save()
+                    new_issues_count += 1
+
+            if label is not None:
+                repo.labels.append(label)
+                repo.save()
+            else:
+                # Si no se pasa label, limpio la lista de labels, porque significa que no hay filtro de labels
+                repo.labels = []
+                repo.save(update_fields=['labels'])
 
             return {
                 "is_success": True,
                 "response_code": 200,
                 "message": "Repository and issues updated successfully",
-                "data": issues_result['data']
+                "data": issues_result['data'],
+                "new_issues": new_issues_count
             }
 
         except Repository.DoesNotExist:
