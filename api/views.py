@@ -117,7 +117,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
             repo.labels = []
             repo.save()
 
-            issues_url = f'https://api.github.com/repos/{repo.owner}/{repo.name}/issues'
+            issues_url = f'https://api.github.com/repos/{repo.owner}/{repo.name}/issues?state=all'
             issues_response = requests.get(issues_url)
 
             if issues_response.status_code != 200:
@@ -135,7 +135,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         if not owner:
             return Response({'error': 'El propietario es requerido'}, status=status.HTTP_400_BAD_REQUEST)
 
-        github_url = f'https://api.github.com/users/{owner}/repos'
+        github_url = f'https://api.github.com/users/{owner}/repos?state=all'
         headers = {'Authorization': f'Bearer {settings.GITHUB_TOKEN}'}
 
         try:

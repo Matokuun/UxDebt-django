@@ -25,6 +25,7 @@ class GitService:
         while True:
             issues_url = f'{self.BASE_URL}/repos/{owner}/{repository}/issues'
             params = {
+                "state": "all",
                 'page': page,
                 'per_page': per_page
             }
@@ -70,7 +71,8 @@ class GitService:
             params = {
                 'page': page,
                 'per_page': per_page,
-                'labels': label
+                'labels': label,
+                "state": "all"
             }
             
             issues_response = requests.get(issues_url, headers=headers, params=params)
@@ -96,7 +98,7 @@ class GitService:
         }
 
     def download_new_repository(self, owner, repository, labels):
-        repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}' #por defecto, trae issues en estado open (en caso de querer cambiarlo, se debe modificar el request a github, con state=all)
+        repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}?state=all' #por defecto, trae issues en estado open (en caso de querer cambiarlo, se debe modificar el request a github, con state=all)
 
         token = self._get_github_token()
         repo_response = requests.get(repo_url, headers={'Authorization': f'token {token}'})
