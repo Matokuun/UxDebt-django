@@ -9,6 +9,9 @@ uxdebt/__pycache__/
 *.py[cod]
 *.so
 
+# Modelo de aprendizaje automatico
+model_clasificator/
+
 # Base de datos local
 *.sqlite3
 
