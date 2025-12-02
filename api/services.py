@@ -1,5 +1,6 @@
 import requests
-from .models import Repository, Issue, GitHubToken
+from .models import Repository, Issue, GitHubToken, Tag, IssueTag, IssueTagPredicted
+from .predictor import predict_tag
 
 class GitService:
     BASE_URL = 'https://api.github.com'
@@ -162,7 +163,29 @@ class GitService:
                 )
                 new_issue.save()
                 new_issues_count += 1
-
+            #predicción de tags
+            preds = predict_tag(f"{issue_data['title']}. {issue_data['body'] or ''}")
+            if preds:
+                # Primera predicción
+                tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
+                IssueTagPredicted.objects.update_or_create(
+                    issue=existing_issue if existing_issue else new_issue,
+                    tag=tag1,
+                    defaults={
+                        "confidence": preds["primary_score"],
+                        "rank": 1
+                    }
+                )
+                # Segunda predicción
+                tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
+                IssueTagPredicted.objects.update_or_create(
+                    issue=existing_issue if existing_issue else new_issue,
+                    tag=tag2,
+                    defaults={
+                        "confidence": preds["secondary_score"],
+                        "rank": 2
+                    }
+                )
         return {
             "is_success": True,
             "response_code": 200,
@@ -250,6 +273,29 @@ class GitService:
                     )
                     new_issue.save()
                     new_issues_count += 1
+                #predicción de tags
+                preds = predict_tag(f"{issue_data['title']}. {issue_data['body'] or ''}")
+                if preds:
+                    # Primera predicción
+                    tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
+                    IssueTagPredicted.objects.update_or_create(
+                        issue=existing_issue if existing_issue else new_issue,
+                        tag=tag1,
+                        defaults={
+                            "confidence": preds["primary_score"],
+                            "rank": 1
+                        }
+                    )
+                    # Segunda predicción
+                    tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
+                    IssueTagPredicted.objects.update_or_create(
+                        issue=existing_issue if existing_issue else new_issue,
+                        tag=tag2,
+                        defaults={
+                            "confidence": preds["secondary_score"],
+                            "rank": 2
+                        }
+                    )
 
             if label is not None:
                 repo.labels.append(label)

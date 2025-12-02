@@ -47,6 +47,7 @@ class Issue(models.Model):
 
     repository = models.ForeignKey('Repository', on_delete=models.CASCADE, related_name='issues', null=True, blank=True)
     tags = models.ManyToManyField(Tag, through='IssueTag')
+    tag_predicted = models.ManyToManyField(Tag, through='IssueTagPredicted', related_name='issues_predicted')
 
     class Meta:
         db_table = 'issue'
@@ -64,6 +65,21 @@ class IssueTag(models.Model):
 
     def __str__(self):
         return f"{self.issue.title} - {self.tag.name}"
+    
+class IssueTagPredicted(models.Model):
+    issue = models.ForeignKey(Issue, on_delete=models.CASCADE, related_name='predicted_tags')
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='predicted_for_issues')
+
+    confidence = models.FloatField(default=0.0)  # Probabilidad de la predicción
+    rank = models.PositiveIntegerField(default=1)  # 1 = top prediction, 2 = segunda mejor, etc.
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'issue_tag_predicted'
+        unique_together = (('issue', 'tag'),)
+
+    def __str__(self):
+        return f"{self.issue.title} - {self.tag.name} ({self.confidence:.2f})"    
     
 class GitHubToken(models.Model):
     token = models.CharField(max_length=255, unique=True)

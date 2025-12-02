@@ -6,7 +6,9 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-from .models import Repository, Issue, Tag, IssueTag, GitHubToken
+
+from api.predictor import predict_tag
+from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken
 from .serializers import RepositoryGetAllSerializer, IssueSerializer, TagSerializer, IssueTagSerializer, GetIssueViewModelSerializer, GitConfigSerializer
 from .filters import IssueFilter
 from .services import GitService
@@ -356,6 +358,30 @@ class IssueViewSet(viewsets.ModelViewSet):
                 tag, _ = Tag.objects.get_or_create(name=tag_name)
                 IssueTag.objects.get_or_create(issue=issue, tag=tag)
 
+            preds = predict_tag(f"{title}. {body}")
+
+            if preds:
+                # Primera predicción
+                tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
+                IssueTagPredicted.objects.update_or_create(
+                    issue=issue,
+                    tag=tag1,
+                    defaults={
+                        "confidence": preds["primary_score"],
+                        "rank": 1
+                    }
+                )
+
+                # Segunda predicción
+                tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
+                IssueTagPredicted.objects.update_or_create(
+                    issue=issue,
+                    tag=tag2,
+                    defaults={
+                        "confidence": preds["secondary_score"],
+                        "rank": 2
+                    }
+                )
             serializer = IssueSerializer(issue)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
