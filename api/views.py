@@ -1,15 +1,17 @@
 import io
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 
 from api.predictor import predict_tag
 from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken
-from .serializers import RepositoryGetAllSerializer, IssueSerializer, TagSerializer, IssueTagSerializer, GetIssueViewModelSerializer, GitConfigSerializer
+from .serializers import RepositoryGetAllSerializer, IssueSerializer, TagSerializer, IssueTagSerializer, GetIssueViewModelSerializer, GitConfigSerializer, RegisterSerializer
 from .filters import IssueFilter
 from .services import GitService
 from django.http import HttpResponse
@@ -21,12 +23,13 @@ import csv
 from io import StringIO
 
 class RepositoryViewSet(viewsets.ModelViewSet):
-    queryset = Repository.objects.all()
-    # serializer_class = RepositorySerializer
-    # permission_classes = [IsAuthenticated]
-    # filter_backends = (DjangoFilterBackend,)
-    # filterset_class = RepositoryFilter
-    # pagination_class = PageNumberPagination
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Repository.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
     @action(detail=False, methods=['post'], url_path='Create')
     def Create(self, request, *args, **kwargs):
@@ -51,13 +54,13 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         if not owner or not name:
             return Response({'error': 'Propietario y Repositorio son campos requeridos.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if Repository.objects.filter(name=name, owner=owner).exists(): #ver despues el caso en el que se edita el label
+        if Repository.objects.filter(name=name, owner=owner, user=request.user).exists(): #ver despues el caso en el que se edita el label
             return Response(
                 {'error': 'El repositorio ingresado ya existe'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        git_service = GitService()
+        git_service = GitService(request.user)
 
         try:
             issues = git_service.download_new_repository(owner, name, labels)
@@ -75,7 +78,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='GetAll')
     def GetAll(self, request, *args, **kwargs):
-        repositories = self.queryset.all().order_by('name')
+        repositories = self.get_queryset().order_by('name').exclude(owner="__local__")
         serializer = RepositoryGetAllSerializer(repositories, many=True)
         return Response(serializer.data)
     
@@ -85,7 +88,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         label = request.data.get("newLabel")
         print("Label recibido:", label, ", id del repo:", id_repo)
 
-        git_service = GitService()
+        git_service = GitService(request.user)
 
         try:
             issues = git_service.update_repository(id_repo, label)
@@ -153,18 +156,22 @@ class RepositoryViewSet(viewsets.ModelViewSet):
             return Response({'error': f'Error al obtener la información desde GitHub: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class IssueViewSet(viewsets.ModelViewSet):
-    queryset = Issue.objects.all()
     serializer_class = IssueSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     filter_backends = (DjangoFilterBackend,)
     filterset_class = IssueFilter
+    
+    def get_queryset(self):
+        return Issue.objects.filter(
+            repository__user=self.request.user
+        )
 
     def perform_create(self, serializer):
         serializer.save()
 
     @action(detail=False, methods=['get'], url_path='GetAll')
     def GetAll(self, request, *args, **kwargs):
-        issues = self.queryset.all().order_by('title').distinct('title')
+        issues = self.get_queryset().order_by('title').distinct('title')
         serializer = IssueSerializer(issues, many=True)
         return Response(serializer.data)
 
@@ -178,7 +185,7 @@ class IssueViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='GetAllByFilter')
     def GetAllByFilter(self, request, *args, **kwargs):
         filter_data = request.data
-        queryset = Issue.objects.all()
+        queryset = self.get_queryset()
 
         if filter_data.get('Title'):
             queryset = queryset.filter(title__icontains=filter_data['Title'])
@@ -240,7 +247,7 @@ class IssueViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='GetFile')
     def GetFile(self, request, *args, **kwargs):
         filter_data = request.data
-        queryset = Issue.objects.all()
+        queryset = self.get_queryset()
 
         if filter_data.get('Title'):
             queryset = queryset.filter(title__icontains=filter_data['Title'])
@@ -324,6 +331,20 @@ class IssueViewSet(viewsets.ModelViewSet):
         response.write(csv_buffer.getvalue())
         return response
     
+    def get_or_create_manual_repository(self, user):
+        repo, created = Repository.objects.get_or_create(
+            user=user,
+            owner="__local__",
+            name="manual-issues",
+            defaults={
+                "git_id": -user.id,  # algo único
+                "html_url": "",
+                "description": "Repositorio interno para issues manuales",
+                "labels": []
+            }
+        )
+        return repo
+
     @action(detail=False, methods=['post'], url_path='newIssue')
     def createIssue(self, request, *args, **kwargs):
         try:
@@ -332,61 +353,50 @@ class IssueViewSet(viewsets.ModelViewSet):
             tag_name = request.data.get('tag', None)
 
             if not title:
-                return Response({'error': 'El campo title es obligatorio.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if body and title:
-                issue, created = Issue.objects.get_or_create(
-                    title=title,
-                    body=body,
-                    defaults={
-                        'html_url': None,
-                        'repository': None,
-                        'git_id': None
-                    }
-                )
-            else:
-                issue = Issue.objects.create(
-                    title=title,
-                    body=body,
-                    html_url=None,
-                    repository=None,
-                    git_id=None
+                return Response(
+                    {'error': 'El campo title es obligatorio.'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Asocio el tag si viene
+            repo = self.get_or_create_manual_repository(request.user)
+
+            issue = Issue.objects.create(
+                title=title,
+                body=body,
+                repository=repo,
+                html_url=None,
+                git_id=None
+            )
+
             if tag_name:
                 tag, _ = Tag.objects.get_or_create(name=tag_name)
                 IssueTag.objects.get_or_create(issue=issue, tag=tag)
 
-            preds = predict_tag(f"{title}. {body}")
+            preds = predict_tag(f"{title}. {body or ''}")
 
             if preds:
-                # Primera predicción
                 tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
                 IssueTagPredicted.objects.update_or_create(
                     issue=issue,
                     tag=tag1,
-                    defaults={
-                        "confidence": preds["primary_score"],
-                        "rank": 1
-                    }
+                    defaults={"confidence": preds["primary_score"], "rank": 1}
                 )
 
-                # Segunda predicción
                 tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
                 IssueTagPredicted.objects.update_or_create(
                     issue=issue,
                     tag=tag2,
-                    defaults={
-                        "confidence": preds["secondary_score"],
-                        "rank": 2
-                    }
+                    defaults={"confidence": preds["secondary_score"], "rank": 2}
                 )
+
             serializer = IssueSerializer(issue)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'], url_path='ImportIssues')
     def ImportIssue(self, request, *args, **kwargs):
@@ -406,7 +416,7 @@ class IssueViewSet(viewsets.ModelViewSet):
                         continue
                     title= row[1]
                     htmlUrl= row[11]
-                    issue = Issue.objects.filter(html_url=htmlUrl).first()
+                    issue = Issue.objects.filter(html_url=htmlUrl, repository__user=request.user).first()
                     if issue: #actualizar datos del issue que ya existe
                         print(f"Issue {title} - existe")
                         issue.status = row[2] == 'True'
@@ -420,8 +430,8 @@ class IssueViewSet(viewsets.ModelViewSet):
                         print(f"Issue {title} - NO existe")
                         owner_name= htmlUrl.split('/')[3]
                         repo_name= htmlUrl.split('/')[4]
-                        repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
-                        git_service = GitService()
+                        repo = Repository.objects.filter(owner=owner_name, name= repo_name,user=request.user).first()
+                        git_service = GitService(request.user)
                         if repo:
                             print(f"repositorio {repo_name} de {owner_name} existe: actualizo repositorio")
                             #actualizo repo (actualmente no se usa, pero puede servir en un futuro)
@@ -446,7 +456,7 @@ class IssueViewSet(viewsets.ModelViewSet):
                                 print(f"repositorio {repo_name} de {owner_name} no existe: agregando nuevo repositorio")
                                 #traer el nuevo
                                 git_service.register_new_repository(owner_name, repo_name)
-                                repo = Repository.objects.filter(owner=owner_name, name= repo_name).first()
+                                repo = Repository.objects.filter(owner=owner_name, name= repo_name,user=request.user).first()
                                 issue = Issue.objects.create(
                                     title=title,
                                     status=row[2] == 'True',
@@ -488,7 +498,7 @@ class IssueViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['put'], url_path='Update/(?P<id>\d+)')
     def Update(self, request, id=None):
         try:
-            issue = get_object_or_404(Issue, pk=id)
+            issue = get_object_or_404(Issue, pk=id, repository__user=request.user)
             serializer = IssueSerializer(issue, data=request.data, partial=True)
 
             if serializer.is_valid():
@@ -565,7 +575,7 @@ class TagViewSet(viewsets.ModelViewSet):
         if not isinstance(tags_id, list):
             return Response({'error': 'tagsId debe ser una lista'}, status=status.HTTP_400_BAD_REQUEST)
 
-        issue = get_object_or_404(Issue, issue_id=issue_id)
+        issue = get_object_or_404(Issue, pk=issue_id, repository__user=request.user)
 
         if tags_id == []:
             issue.tags.clear()
@@ -593,19 +603,26 @@ class IssueTagViewSet(viewsets.ModelViewSet):
     serializer_class = IssueTagSerializer
 
 class GitViewSet(viewsets.ViewSet):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.git_service = GitService()
+    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['post'], url_path='UpdateRepository/(?P<repository_id>[^/.]+)')
     def update_repository(self, request, repository_id):
+        git_service = GitService(request.user)
+
         try:
-            issues = self.git_service.update_repository(repository_id)
+            issues = git_service.update_repository(repository_id)
             if not issues['is_success']:
-                return Response({"error": issues['message']}, status=issues['response_code'])
+                return Response(
+                    {"error": issues['message']},
+                    status=issues['response_code']
+                )
             return Response(issues, status=status.HTTP_200_OK)
+
         except Exception as ex:
-            return Response({"error": f"Internal Server Error: {str(ex)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": f"Internal Server Error: {str(ex)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 def home(request):
     return HttpResponse("Bienvenido a la API de UxDebt. Usa /api/ para acceder a los endpoints.")
@@ -620,30 +637,31 @@ class CustomPagination(PageNumberPagination):
         return int(request.GET.get('pageSize', self.page_size))
     
 class GitConfigViewSet(viewsets.ModelViewSet):
-    queryset = GitHubToken.objects.all()
+    permission_classes = [IsAuthenticated]
     serializer_class = GitConfigSerializer
+
+    def get_queryset(self):
+        print("AUTH HEADER:", self.request.headers.get('Authorization'))
+        print("USER:", self.request.user)
+        return GitHubToken.objects.filter(user=self.request.user)
 
     @action(detail=False, methods=['post'], url_path='saveToken')
     def save_token(self, request):
         token = request.data.get('token')
 
         if not token:
-            return Response({'error': 'Token no proporcionado'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Token no proporcionado'}, status=400)
 
-        try:
-            git_config, created = GitHubToken.objects.get_or_create(id=1)
-            git_config.token = token
-            git_config.save()
+        git_token, _ = GitHubToken.objects.get_or_create(user=request.user)
+        git_token.token = token
+        git_token.save()
 
-            return Response({'message': 'Token guardado con éxito'}, status=status.HTTP_201_CREATED)
-
-        except Exception as ex:
-            return Response({'error': f'Error al guardar el token: {str(ex)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'message': 'Token guardado con éxito'})
 
     @action(detail=False, methods=['get'], url_path='getToken')
     def get_token(self, request):
         try:
-            git_config = GitHubToken.objects.first()
+            git_config = get_object_or_404(GitHubToken, user=request.user)
 
             if not git_config:
                 return Response({'error': 'No se encontró un token guardado'}, status=status.HTTP_404_NOT_FOUND)
@@ -652,3 +670,34 @@ class GitConfigViewSet(viewsets.ModelViewSet):
 
         except Exception as ex:
             return Response({'error': f'Error al obtener el token: {str(ex)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Usuario creado correctamente"},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get("refresh")
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {"message": "Logout exitoso"},
+                status=status.HTTP_205_RESET_CONTENT
+            )
+        except Exception:
+            return Response(
+                {"error": "Token inválido"},
+                status=status.HTTP_400_BAD_REQUEST
+            )

@@ -5,12 +5,14 @@ from .predictor import predict_tag
 class GitService:
     BASE_URL = 'https://api.github.com'
 
+    def __init__(self, user):
+        self.user = user
+
     def _get_github_token(self):
         try:
-            token_obj = GitHubToken.objects.latest('created_at')
-            return token_obj.token
+            return self.user.github_token.token
         except GitHubToken.DoesNotExist:
-            raise ValueError("No GitHub token found in the database.")
+            raise ValueError("El usuario no tiene token de GitHub configurado.")
 
     def _fetch_all_issues(self, owner, repository, labels=None):
         issues_data = []
@@ -114,7 +116,7 @@ class GitService:
 
         repo_data = repo_response.json()
 
-        existing_repo = Repository.objects.filter(owner=owner, name=repository).first()
+        existing_repo = Repository.objects.filter(owner=owner, name=repository, user=self.user).first()
 
         if existing_repo:
             existing_repo.git_id = repo_data['id']
@@ -130,7 +132,8 @@ class GitService:
                 git_id=repo_data['id'],
                 html_url=repo_data['html_url'],
                 description=repo_data.get('description', ''),
-                labels=labels or []
+                labels=labels or [],
+                user=self.user
             )
             new_repo.save()
 
@@ -211,7 +214,7 @@ class GitService:
         repo_data = repo_response.json()
         print('repositorio: ', repo_data['html_url'], repo_data['id'])
         print('repositorio: ', owner, repository)
-        existing_repo = Repository.objects.filter(owner=owner, name=repository).first()
+        existing_repo = Repository.objects.filter(owner=owner, name=repository, user=self.user).first()
 
         if existing_repo:
             existing_repo.git_id = repo_data['id']
@@ -226,7 +229,8 @@ class GitService:
                 git_id=repo_data['id'],
                 html_url=repo_data['html_url'],
                 description=repo_data.get('description', ''),
-                labels= []
+                labels= [],
+                user=self.user
             )
             new_repo.save()
 
@@ -239,7 +243,7 @@ class GitService:
 
     def update_repository(self, repository_id, label=None):
         try:
-            repo = Repository.objects.get(repository_id=repository_id)
+            repo = Repository.objects.get(repository_id=repository_id, user=self.user)
             if label is None:
                 issues_result = self._fetch_all_issues(repo.owner, repo.name)
             else:

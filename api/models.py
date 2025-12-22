@@ -1,11 +1,12 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.auth.models import User
 
 class Repository(models.Model):
     repository_id = models.AutoField(primary_key=True)
     owner = models.CharField(max_length=255)
     name = models.CharField(max_length=255)
-    git_id = models.IntegerField(unique=True)
+    git_id = models.IntegerField()
     html_url = models.URLField()
     description = models.TextField(null=True, blank=True)
     labels = ArrayField(
@@ -13,7 +14,11 @@ class Repository(models.Model):
         blank=True,
         default=list
     )
-
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='repositories'
+    )
     class Meta:
         db_table = 'repository'
 
@@ -34,7 +39,7 @@ class Tag(models.Model):
     
 class Issue(models.Model):
     issue_id = models.AutoField(primary_key=True)
-    git_id = models.BigIntegerField(unique=True, null=True, blank=True)
+    git_id = models.BigIntegerField(null=True, blank=True)
     html_url = models.URLField(null=True, blank=True)
     status = models.BooleanField(default=True)
     title = models.CharField(max_length=255)
@@ -82,7 +87,12 @@ class IssueTagPredicted(models.Model):
         return f"{self.issue.title} - {self.tag.name} ({self.confidence:.2f})"    
     
 class GitHubToken(models.Model):
-    token = models.CharField(max_length=255, unique=True)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='github_token'
+    )
+    token = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     description = models.TextField(null=True, blank=True)
