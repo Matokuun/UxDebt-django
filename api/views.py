@@ -10,8 +10,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 
 from api.predictor import predict_tag
-from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken
-from .serializers import RepositoryGetAllSerializer, IssueSerializer, TagSerializer, IssueTagSerializer, GetIssueViewModelSerializer, GitConfigSerializer, RegisterSerializer
+from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken, Project, ProjectIssue
+from .serializers import IssueWithProjectsViewSerializer, RepositoryGetAllSerializer, IssueSerializer, TagSerializer, IssueTagSerializer, GetIssueViewModelSerializer, GitConfigSerializer, RegisterSerializer, ProjectSerializer, ProjectListSerializer, IssueProjectSerializer, IssueWithProjectsSerializer
 from .filters import IssueFilter
 from .services import GitService
 from django.http import HttpResponse
@@ -165,6 +165,12 @@ class IssueViewSet(viewsets.ModelViewSet):
         return Issue.objects.filter(
             repository__user=self.request.user
         )
+    
+    def get_serializer_class(self):
+        if self.action in ['GetAllByFilter', 'list', 'retrieve']:
+            return IssueWithProjectsViewSerializer
+
+        return IssueSerializer
 
     def perform_create(self, serializer):
         serializer.save()
@@ -172,7 +178,7 @@ class IssueViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='GetAll')
     def GetAll(self, request, *args, **kwargs):
         issues = self.get_queryset().order_by('title').distinct('title')
-        serializer = IssueSerializer(issues, many=True)
+        serializer = self.get_serializer(issues, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='SwitchDiscarded/(?P<pk>[^/.]+)')
@@ -186,7 +192,7 @@ class IssueViewSet(viewsets.ModelViewSet):
     def GetAllByFilter(self, request, *args, **kwargs):
         filter_data = request.data
         queryset = self.get_queryset()
-
+        print("Filter Data:", filter_data)
         if filter_data.get('Title'):
             queryset = queryset.filter(title__icontains=filter_data['Title'])
         
@@ -201,6 +207,21 @@ class IssueViewSet(viewsets.ModelViewSet):
 
         if filter_data.get('Tags'):
             queryset = queryset.filter(tags__tagId__in=filter_data['Tags']).distinct()
+
+        ProjectId = filter_data.get('ProjectId')
+        ProjectStatus = filter_data.get('ProjectStatus')
+
+        if ProjectId:
+            queryset = queryset.filter(projectissue__project_id__in=ProjectId.split(','))
+
+        if ProjectStatus:
+            queryset = queryset.filter(projectissue__status__in=ProjectStatus.split(','))
+
+        queryset = queryset.distinct()
+
+        print("ProjectId:", filter_data.get('ProjectId'))
+        print("ProjectStatus:", filter_data.get('ProjectStatus'))
+        print("SQL:", queryset.query)
 
         if filter_data.get('startDate') and filter_data.get('endDate'):
             try:
@@ -233,7 +254,7 @@ class IssueViewSet(viewsets.ModelViewSet):
         paginator = Paginator(queryset, page_size)
         page_obj = paginator.get_page(page)
 
-        serializer = GetIssueViewModelSerializer(page_obj, many=True)
+        serializer = self.get_serializer(page_obj, many=True)
 
         return Response({
             'results': serializer.data,
@@ -701,3 +722,195 @@ class LogoutView(APIView):
                 {"error": "Token inválido"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+class ProjectViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProjectSerializer
+
+    def get_queryset(self):
+        return Project.objects.filter(user=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='list')
+    def list_projects(self, request):
+        projects = self.get_queryset()
+        serializer = ProjectListSerializer(projects, many=True)
+        return Response(serializer.data)
+            
+    def get_or_create_project_repository(self, user):
+        repo, _ = Repository.objects.get_or_create(
+            user=user,
+            owner="__project__",
+            name="github-projects",
+            defaults={
+                "git_id": -1000 - user.id,
+                "html_url": "",
+                "description": "Issues importados desde GitHub Projects",
+                "labels": []
+            }
+        )
+        return repo
+
+    @action(detail=False, methods=['post'], url_path='import')
+    def import_project(self, request):
+        owner = request.data.get('owner')
+        project_number = request.data.get('projectNumber')
+
+        if not owner or not project_number:
+            return Response(
+                {"error": "owner y projectNumber son obligatorios"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if Project.objects.filter(
+            user=request.user,
+            owner=owner,
+            project_number=project_number
+        ).exists():
+            return Response(
+                {"error": "Este proyecto ya fue importado"},
+                status=status.HTTP_409_CONFLICT
+            )
+        git_service = GitService(request.user)
+        result = git_service.fetch_project_with_issues(
+            owner=owner,
+            project_number=int(project_number)
+        )
+        print("RESULTADO GITHUB:", result)
+        if not result.get("is_success"):
+            return Response(
+                {
+                    "error": result.get("error", "Error al obtener el proyecto"),
+                    "details": result.get("data"),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        github_data = result.get("data")
+
+        if not github_data or "data" not in github_data:
+            return Response(
+                {"error": "Respuesta inválida de GitHub"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        project_data = github_data["data"]["user"]["projectV2"]
+
+        if not project_data:
+            return Response(
+                {"error": "Proyecto no encontrado en GitHub"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        project, _ = Project.objects.get_or_create(
+            git_id=project_data["id"],
+            user=request.user,
+            owner=owner,
+            project_number=project_number,
+            defaults={
+                "name": project_data["title"],
+                "html_url": project_data["url"],
+            }
+        )
+        project_repo = self.get_or_create_project_repository(request.user)
+        for item in project_data["items"]["nodes"]:
+            content = item.get("content")
+            if not content:
+                continue
+
+            issue = Issue.objects.filter(
+                html_url=content["url"],
+                repository__user=request.user
+            ).first()
+
+            if not issue:
+                issue = Issue.objects.create(
+                    title=content["title"],
+                    body=content.get("body"),
+                    html_url=content["url"],
+                    status=content["state"] == "OPEN",
+                    repository=project_repo
+                )
+            preds = predict_tag(f"{content['title']}. {content.get('body') or ''}")
+
+            if preds:
+                tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
+                IssueTagPredicted.objects.update_or_create(
+                    issue=issue,
+                    tag=tag1,
+                    defaults={"confidence": preds["primary_score"], "rank": 1}
+                )
+
+                tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
+                IssueTagPredicted.objects.update_or_create(
+                    issue=issue,
+                    tag=tag2,
+                    defaults={"confidence": preds["secondary_score"], "rank": 2}
+                )
+
+            status_value = "TODO"
+            for field in item["fieldValues"]["nodes"]:
+                if field.get("field", {}).get("name") == "Status":
+                    status_value = field["name"].upper()
+
+            ProjectIssue.objects.get_or_create(
+                project=project,
+                issue=issue,
+                defaults={"status": status_value}
+            )
+
+        serializer = ProjectSerializer(project)
+        return Response(serializer.data, status=201)
+    
+    @action(detail=True, methods=['post'], url_path='refresh')
+    def refresh_project(self, request, pk=None):
+        project = get_object_or_404(Project, pk=pk, user=request.user)
+
+        git_service = GitService(request.user)
+        result = git_service.fetch_project_with_issues(
+            owner=project.owner,
+            project_number=project.project_number
+        )
+
+        if not result.get("is_success"):
+            return Response(
+                {"error": "Error al actualizar el proyecto"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project_data = result["data"]["data"]["user"]["projectV2"]
+        project_repo = self.get_or_create_project_repository(request.user)
+
+        for item in project_data["items"]["nodes"]:
+            content = item.get("content")
+            if not content:
+                continue
+
+            issue, created = Issue.objects.get_or_create(
+                html_url=content["url"],
+                repository=project_repo,
+                defaults={
+                    "title": content["title"],
+                    "body": content.get("body"),
+                    "status": content["state"] == "OPEN",
+                }
+            )
+
+            # Si ya existía → actualizar
+            if not created:
+                issue.title = content["title"]
+                issue.body = content.get("body")
+                issue.status = content["state"] == "OPEN"
+                issue.save()
+
+            # Status del proyecto
+            status_value = "TODO"
+            for field in item["fieldValues"]["nodes"]:
+                if field.get("field", {}).get("name") == "Status":
+                    status_value = field["name"].upper()
+
+            ProjectIssue.objects.update_or_create(
+                project=project,
+                issue=issue,
+                defaults={"status": status_value}
+            )
+
+        return Response({"message": "Proyecto actualizado correctamente"})

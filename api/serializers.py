@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken
+from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken, Project, ProjectIssue
 from django.contrib.auth.models import User
 
 class RepositoryCreateSerializer(serializers.ModelSerializer):
@@ -108,3 +108,66 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         return user
+    
+class ProjectSerializer(serializers.ModelSerializer):
+    projectId = serializers.IntegerField(source='project_id')
+
+    class Meta:
+        model = Project
+        fields = [
+            'projectId',
+            'name',
+            'description',
+            'git_id',
+            'html_url',
+            'created_at',
+        ]
+
+class IssueProjectSerializer(serializers.ModelSerializer):
+    projectId = serializers.IntegerField(source='project.project_id')
+    projectName = serializers.CharField(source='project.name')
+
+    class Meta:
+        model = ProjectIssue
+        fields = [
+            'projectId',
+            'projectName',
+            'status',
+        ]
+
+class ProjectListSerializer(serializers.ModelSerializer):
+    projectId = serializers.IntegerField(source='project_id')
+    issuesCount = serializers.IntegerField(source='issues.count', read_only=True)
+
+    class Meta:
+        model = Project
+        fields = [
+            'projectId',
+            'name',
+            'description',
+            'issuesCount',
+            'created_at',
+            'owner',
+            'html_url',
+            'git_id',
+        ]
+
+class IssueWithProjectsSerializer(IssueSerializer):
+    projects = IssueProjectSerializer(
+        source='projectissue_set',
+        many=True,
+        read_only=True
+    )
+
+    class Meta(IssueSerializer.Meta):
+        fields = IssueSerializer.Meta.fields + ['projects']
+
+class IssueWithProjectsViewSerializer(GetIssueViewModelSerializer):
+    projects = IssueProjectSerializer(
+        source='projectissue_set',
+        many=True,
+        read_only=True
+    )
+
+    class Meta(GetIssueViewModelSerializer.Meta):
+        fields = GetIssueViewModelSerializer.Meta.fields + ['projects']

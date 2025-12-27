@@ -54,11 +54,52 @@ class Issue(models.Model):
     tags = models.ManyToManyField(Tag, through='IssueTag')
     tag_predicted = models.ManyToManyField(Tag, through='IssueTagPredicted', related_name='issues_predicted')
 
+    projects = models.ManyToManyField(
+        'Project',
+        through='ProjectIssue',
+        related_name='issues',
+        blank=True
+    )
+
     class Meta:
         db_table = 'issue'
 
     def __str__(self):
         return self.title
+
+class Project(models.Model):
+    project_id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    owner = models.CharField(max_length=255)
+    project_number = models.IntegerField()
+    git_id = models.CharField(max_length=255, null=True, blank=True)
+    html_url = models.URLField(null=True, blank=True)
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'project'
+
+    def __str__(self):
+        return self.name
+
+class ProjectIssue(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    issue = models.ForeignKey(Issue, on_delete=models.CASCADE)
+
+    status = models.CharField(
+        max_length=50,
+        default='TODO'
+    )
+
+    class Meta:
+        unique_together = ('project', 'issue')
+        db_table = 'project_issue'
+
+    def __str__(self):
+        return f"{self.project.name} - {self.issue.title} ({self.status})"
 
 class IssueTag(models.Model):
     issue = models.ForeignKey(Issue, on_delete=models.CASCADE, related_name='issue_tags')

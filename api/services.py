@@ -324,3 +324,120 @@ class GitService:
                 "message": "Repository not found",
                 "data": None
             }
+        
+    def _run_graphql(self, query, variables):
+        token = self._get_github_token()
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+
+        response = requests.post(
+            "https://api.github.com/graphql",
+            json={"query": query, "variables": variables},
+            headers=headers
+        )
+
+        try:
+            return response.json()
+        except Exception:
+            return {}
+    
+    def fetch_project_with_issues(self, owner, project_number):
+        variables = {
+            "login": owner,
+            "projectNumber": project_number
+        }
+        PROJECT_QUERY = """
+        query($login: String!, $projectNumber: Int!) {
+        %s(login: $login) {
+            projectV2(number: $projectNumber) {
+            id
+            title
+            url
+            items(first: 100) {
+                nodes {
+                content {
+                    ... on Issue {
+                    id
+                    title
+                    url
+                    body
+                    state
+                    }
+                }
+                fieldValues(first: 20) {
+                    nodes {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                        name
+                        field {
+                        ... on ProjectV2SingleSelectField {
+                            name
+                        }
+                        }
+                    }
+                    }
+                }
+                }
+            }
+            }
+        }
+        }
+        """
+        # ========== ORGANIZATION ==========
+        org_query = PROJECT_QUERY % "organization"
+        org_payload = self._run_graphql(org_query, variables)
+
+        print("ORG PAYLOAD:", org_payload)
+
+        project = (
+            org_payload
+            .get("data", {})
+            .get("organization")
+        )
+
+        if project and project.get("projectV2"):
+            return {
+                "is_success": True,
+                "data": {
+                    "data": {
+                        "user": {
+                            "projectV2": project["projectV2"]
+                        }
+                    }
+                }
+            }
+        
+        
+        # ========== USER ==========
+        user_query = PROJECT_QUERY % "user"
+        user_payload = self._run_graphql(user_query, variables)
+
+        print("USER PAYLOAD:", user_payload)
+
+        project = (
+            user_payload
+            .get("data", {})
+            .get("user")
+        )
+
+        if project and project.get("projectV2"):
+            return {
+                "is_success": True,
+                "data": {
+                    "data": {
+                        "user": {
+                            "projectV2": project["projectV2"]
+                        }
+                    }
+                }
+            }
+
+        # ========== FAIL ==========
+        return {
+            "is_success": False,
+            "error": "Proyecto no encontrado ni como usuario ni como organización",
+            "debug": {
+                "user": user_payload,
+                "organization": org_payload
+            }
+        }
