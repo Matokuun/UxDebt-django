@@ -829,6 +829,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     status=content["state"] == "OPEN",
                     repository=project_repo
                 )
+
+
+            repo_owner, repo_name = git_service.extract_repo_from_issue_url(content["url"])
+            print("ISSUE URL:", content["url"])
+            print("EXTRACTED:", repo_owner, repo_name)
+            if repo_owner and repo_name:
+                git_service.ensure_repo_labels(repo_owner, repo_name)
+
             preds = predict_tag(f"{content['title']}. {content.get('body') or ''}")
 
             if preds:
@@ -845,6 +853,19 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     tag=tag2,
                     defaults={"confidence": preds["secondary_score"], "rank": 2}
                 )
+                IssueTag.objects.update_or_create(
+                    issue= issue,
+                    tag= tag1
+                )
+                if repo_owner and repo_name:
+                    issue_number = git_service.extract_issue_number(content["url"])
+                    if issue_number:
+                        git_service.apply_label_to_issue(
+                            owner=repo_owner,
+                            repo=repo_name,
+                            issue_number=issue_number,
+                            label_name=tag1.name
+                        )
 
             status_value = "TODO"
             for field in item["fieldValues"]["nodes"]:
@@ -863,6 +884,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='refresh')
     def refresh_project(self, request, pk=None):
         project = get_object_or_404(Project, pk=pk, user=request.user)
+        project_repo = self.get_or_create_project_repository(request.user)
 
         git_service = GitService(request.user)
         result = git_service.fetch_project_with_issues(
@@ -877,31 +899,45 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
 
         project_data = result["data"]["data"]["user"]["projectV2"]
-        project_repo = self.get_or_create_project_repository(request.user)
 
         for item in project_data["items"]["nodes"]:
             content = item.get("content")
             if not content:
                 continue
 
-            issue, created = Issue.objects.get_or_create(
-                html_url=content["url"],
-                repository=project_repo,
-                defaults={
-                    "title": content["title"],
-                    "body": content.get("body"),
-                    "status": content["state"] == "OPEN",
-                }
+            repo_owner, repo_name = git_service.extract_repo_from_issue_url(content["url"])
+            if not repo_owner or not repo_name:
+                continue
+
+            issue = (
+                Issue.objects
+                .filter(html_url=content["url"], repository__user=request.user)
+                .select_related("repository")
+                .first()
             )
 
-            # Si ya existía → actualizar
-            if not created:
+            created = False
+
+            if not issue:
+                issue = Issue.objects.create(
+                    html_url=content["url"],
+                    title=content["title"],
+                    body=content.get("body"),
+                    status=content["state"] == "OPEN",
+                    repository=project_repo  # 👈 github-projects SOLO si es nuevo
+                )
+                created = True
+            else:
                 issue.title = content["title"]
                 issue.body = content.get("body")
                 issue.status = content["state"] == "OPEN"
+
+                # si ya tiene repo real, NO se toca
+                if issue.repository is None:
+                    issue.repository = project_repo
+
                 issue.save()
 
-            # Status del proyecto
             status_value = "TODO"
             for field in item["fieldValues"]["nodes"]:
                 if field.get("field", {}).get("name") == "Status":
@@ -912,5 +948,36 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 issue=issue,
                 defaults={"status": status_value}
             )
+
+            if created:
+                git_service.ensure_repo_labels(repo_owner, repo_name)
+
+                preds = predict_tag(f"{content['title']}. {content.get('body') or ''}")
+                if preds:
+                    tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
+                    tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
+
+                    IssueTagPredicted.objects.update_or_create(
+                        issue=issue,
+                        tag=tag1,
+                        defaults={"confidence": preds["primary_score"], "rank": 1}
+                    )
+
+                    IssueTagPredicted.objects.update_or_create(
+                        issue=issue,
+                        tag=tag2,
+                        defaults={"confidence": preds["secondary_score"], "rank": 2}
+                    )
+
+                    IssueTag.objects.update_or_create(issue=issue, tag=tag1)
+
+                    issue_number = git_service.extract_issue_number(content["url"])
+                    if issue_number:
+                        git_service.apply_label_to_issue(
+                            owner=repo_owner,
+                            repo=repo_name,
+                            issue_number=issue_number,
+                            label_name=tag1.name
+                        )
 
         return Response({"message": "Proyecto actualizado correctamente"})

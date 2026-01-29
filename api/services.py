@@ -1,6 +1,7 @@
 import requests
 from .models import Repository, Issue, GitHubToken, Tag, IssueTag, IssueTagPredicted
 from .predictor import predict_tag
+from urllib.parse import urlparse
 
 class GitService:
     BASE_URL = 'https://api.github.com'
@@ -13,6 +14,29 @@ class GitService:
             return self.user.github_token.token
         except GitHubToken.DoesNotExist:
             raise ValueError("El usuario no tiene token de GitHub configurado.")
+
+    def _create_github_label(self, owner, repo, name, color, description=""):
+        token = self._get_github_token()
+
+        url = f"{self.BASE_URL}/repos/{owner}/{repo}/labels"
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+
+        payload = {
+            "name": name,
+            "color": color,
+            "description": description
+        }
+
+        response = requests.post(url, headers=headers, json=payload)
+
+        return {
+            "status_code": response.status_code,
+            "response": response.json() if response.content else None
+        }
 
     def _fetch_all_issues(self, owner, repository, labels=None):
         issues_data = []
@@ -99,6 +123,96 @@ class GitService:
             "is_success": True,
             "data": issues_data
         }
+    
+    def extract_repo_from_issue_url(self, issue_url):
+        try:
+            path = urlparse(issue_url).path.strip("/").split("/")
+            # /owner/repo/issues/number
+            if len(path) >= 4 and path[2] == "issues":
+                return path[0], path[1]
+        except Exception:
+            pass
+
+        return None, None
+
+    def create_default_labels(self, owner, repo):
+        labels = [
+            {
+                "name": "NEW/UPDATE FUNCTIONALITY",
+                "color": "1f6feb",
+                "description": "Fixes, updates or new functionality"
+            },
+            {
+                "name": "UX BUG",
+                "color": "d73a4a",
+                "description": "User experience bug"
+            },
+            {
+                "name": "UX ISSUE",
+                "color": "fbca04",
+                "description": "User experience smell or UX inconsistency"
+            },
+            {
+                "name": "UX FEATURE REQUEST",
+                "color": "0e8a16",
+                "description": "New UX feature request"
+            },
+            {
+                "name": "FEATURE REQUEST",
+                "color": "5319e7",
+                "description": "New feature request"
+            }
+        ]
+
+        results = []
+        for label in labels:
+            result = self._create_github_label(
+                owner=owner,
+                repo=repo,
+                name=label["name"],
+                color=label["color"],
+                description=label["description"]
+            )
+            results.append({
+                "label": label["name"],
+                "status_code": result["status_code"]
+            })
+
+        return results
+    
+    def ensure_repo_labels(self, owner, repo):
+        return self.create_default_labels(owner, repo)
+    
+    def extract_issue_number(self, issue_url):
+        try:
+            return int(issue_url.rstrip("/").split("/")[-1])
+        except Exception:
+            return None
+
+    def apply_label_to_issue(self, owner, repo, issue_number, label_name):
+        token = self._get_github_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+
+        url = f"{self.BASE_URL}/repos/{owner}/{repo}/issues/{issue_number}/labels"
+
+        payload = {
+            "labels": [label_name]
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+
+        # 200 = ok, 201 = created
+        if response.status_code not in (200, 201):
+            print(
+                f"[GitHub] Error asignando label '{label_name}' "
+                f"a {owner}/{repo}#{issue_number}: {response.text}"
+            )
+
+        return response.status_code in (200, 201)
 
     def download_new_repository(self, owner, repository, labels):
         repo_url = f'{self.BASE_URL}/repos/{owner}/{repository}?state=all' #por defecto, trae issues en estado open (en caso de querer cambiarlo, se debe modificar el request a github, con state=all)
@@ -188,6 +302,10 @@ class GitService:
                         "confidence": preds["secondary_score"],
                         "rank": 2
                     }
+                )
+                IssueTag.objects.update_or_create(
+                    issue= existing_issue if existing_issue else new_issue,
+                    tag= tag1
                 )
         return {
             "is_success": True,
@@ -300,6 +418,10 @@ class GitService:
                             "rank": 2
                         }
                     )
+                    IssueTag.objects.update_or_create(
+                        issue= existing_issue if existing_issue else new_issue,
+                        tag= tag1
+                    )
 
             if label is not None:
                 repo.labels.append(label)
@@ -383,7 +505,6 @@ class GitService:
         }
         }
         """
-        # ========== ORGANIZATION ==========
         org_query = PROJECT_QUERY % "organization"
         org_payload = self._run_graphql(org_query, variables)
 
@@ -407,8 +528,6 @@ class GitService:
                 }
             }
         
-        
-        # ========== USER ==========
         user_query = PROJECT_QUERY % "user"
         user_payload = self._run_graphql(user_query, variables)
 
@@ -431,8 +550,6 @@ class GitService:
                     }
                 }
             }
-
-        # ========== FAIL ==========
         return {
             "is_success": False,
             "error": "Proyecto no encontrado ni como usuario ni como organización",
