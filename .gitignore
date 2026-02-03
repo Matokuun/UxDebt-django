@@ -36,3 +36,6 @@ api/migrations/__pycache__/
 
 # Docker
 docker-compose.override.yml
+
+# Claves y certificados
+*.pem
