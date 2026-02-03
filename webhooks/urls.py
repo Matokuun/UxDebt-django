@@ -1,6 +1,6 @@
 from django.urls import path
-from .api import GithubWebookAPI
+from .api import GithubWebhookAPI
 
 urlpatterns = [
-    path('', GithubWebookAPI.as_view()),
+    path('', GithubWebhookAPI.as_view()),
 ]
