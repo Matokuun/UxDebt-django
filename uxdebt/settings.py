@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
+from dotenv import load_dotenv
+
+load_dotenv()  # take environment variables from .env.
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -88,7 +91,7 @@ DATABASES = {
         'USER': os.environ.get('DB_USER','postgres'), 
         'PASSWORD': os.environ.get('DB_PASSWORD','root'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+        'PORT': os.environ.get('DB_PORT', '5433'),
     }
 }
 
@@ -165,3 +168,8 @@ SIMPLE_JWT = {
 
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# GitHub App
+GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
+GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "").encode("utf-8")
+GITHUB_PRIVATE_KEY_PATH = os.getenv("GITHUB_PRIVATE_KEY_PATH")
