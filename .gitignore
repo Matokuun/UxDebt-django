@@ -2,10 +2,10 @@
 venv/
 env/
 .venv/
+.env
 
 # Archivos de Python compilados
-api/__pycache__/
-uxdebt/__pycache__/
+__pycache__/
 *.py[cod]
 *.so
 
@@ -28,7 +28,6 @@ Thumbs.db
 
 # Archivos de migración rotos (opcional)
 *.pyc
-api/migrations/__pycache__/
 
 # Carpeta del IDE/editor
 .vscode/
