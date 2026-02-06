@@ -485,6 +485,11 @@ class GitService:
                     url
                     body
                     state
+                    labels(first: 20) {
+                        nodes {
+                            name
+                        }
+                    }
                     }
                 }
                 fieldValues(first: 20) {

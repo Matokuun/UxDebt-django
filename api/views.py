@@ -822,10 +822,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ).first()
 
             if not issue:
+                github_labels = ", ".join(
+                    l["name"] for l in content.get("labels", {}).get("nodes", [])
+                )
                 issue = Issue.objects.create(
                     title=content["title"],
                     body=content.get("body"),
                     html_url=content["url"],
+                    labels= github_labels,
                     status=content["state"] == "OPEN",
                     repository=project_repo
                 )
@@ -840,13 +844,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
             preds = predict_tag(f"{content['title']}. {content.get('body') or ''}")
 
             if preds:
+                predicted_label = preds["primary_label"]
+                if issue.labels:
+                    issue.labels = f"{issue.labels}, {predicted_label}"
+                else:
+                    issue.labels = predicted_label
+
+                issue.save(update_fields=["labels"])
+
                 tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
                 IssueTagPredicted.objects.update_or_create(
                     issue=issue,
                     tag=tag1,
                     defaults={"confidence": preds["primary_score"], "rank": 1}
                 )
-
                 tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
                 IssueTagPredicted.objects.update_or_create(
                     issue=issue,
@@ -917,6 +928,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
 
             created = False
+            github_labels = ", ".join(
+                l["name"] for l in content.get("labels", {}).get("nodes", [])
+            )
 
             if not issue:
                 issue = Issue.objects.create(
@@ -924,13 +938,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     title=content["title"],
                     body=content.get("body"),
                     status=content["state"] == "OPEN",
-                    repository=project_repo  # 👈 github-projects SOLO si es nuevo
+                    labels= github_labels,
+                    repository=project_repo 
                 )
                 created = True
             else:
                 issue.title = content["title"]
                 issue.body = content.get("body")
                 issue.status = content["state"] == "OPEN"
+                issue.labels = github_labels
 
                 # si ya tiene repo real, NO se toca
                 if issue.repository is None:
@@ -954,6 +970,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
                 preds = predict_tag(f"{content['title']}. {content.get('body') or ''}")
                 if preds:
+
+                    predicted_label = preds["primary_label"]
+                    if issue.labels:
+                        issue.labels = f"{issue.labels}, {predicted_label}"
+                    else:
+                        issue.labels = predicted_label
+                    issue.save(update_fields=["labels"])
+
                     tag1, _ = Tag.objects.get_or_create(name=preds["primary_label"])
                     tag2, _ = Tag.objects.get_or_create(name=preds["secondary_label"])
 
