@@ -34,7 +34,7 @@ setuptools==70.2.0
 sqlparse==0.5.5
 sympy==1.14.0
 tokenizers==0.20.3
-torch==2.4.1+cpu
+torch==2.4.1
 tqdm==4.67.3
 transformers==4.46.3
 typing_extensions==4.15.0
