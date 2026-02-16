@@ -33,6 +33,10 @@ spec:
               value: "5432"
             - name: GITHUB_PRIVATE_KEY_PATH
               value: "/app/certs/private-key.pem"
+            - name: GITHUB_APP_ID
+              value: "2828366"
+            - name: GITHUB_WEBHOOK_SECRET
+              value: "matomaniaco"
           volumeMounts:
             - name: certs-volume
               mountPath: "/app/certs" 
