@@ -31,3 +31,13 @@ spec:
               value: "issue-tracker-db"
             - name: DB_PORT
               value: "5432"
+            - name: GITHUB_PRIVATE_KEY_PATH
+              value: "/app/certs/private-key.pem"
+          volumeMounts:
+            - name: certs-volume
+              mountPath: "/app/certs" 
+              readOnly: true
+      volumes:
+        - name: certs-volume
+          secret:
+            secretName: github-app-key 
