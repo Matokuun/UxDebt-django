@@ -7,7 +7,35 @@ import hmac
 import hashlib
 import jwt
 import time
+from api.predictor import predict_tag
 
+DEFAULT_LABELS = [
+    {
+        "name": "NEW/UPDATE FUNCTIONALITY",
+        "color": "1f6feb",
+        "description": "Fixes, updates or new functionality"
+    },
+    {
+        "name": "UX BUG",
+        "color": "d73a4a",
+        "description": "User experience bug"
+    },
+    {
+        "name": "UX SMELL",
+        "color": "fbca04",
+        "description": "User experience smell or UX inconsistency"
+    },
+    {
+        "name": "UX FEATURE REQUEST",
+        "color": "0e8a16",
+        "description": "New UX feature request"
+    },
+    {
+        "name": "FEATURE REQUEST",
+        "color": "5319e7",
+        "description": "New feature request"
+    }
+]
 
 def get_installation_token(installation_id):
     try:
@@ -42,6 +70,35 @@ def add_label_to_issue(repo_full_name, issue_number, token, label):
     response = requests.post(url, headers=headers, json=data)
     return response.status_code
 
+def ensure_default_labels(repo_full_name, token):
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    url = f"https://api.github.com/repos/{repo_full_name}/labels"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print("Error obteniendo labels existentes")
+        return False
+
+    existing_labels = {label["name"] for label in response.json()}
+
+    for label in DEFAULT_LABELS:
+        if label["name"] not in existing_labels:
+            create_response = requests.post(
+                url,
+                headers=headers,
+                json=label
+            )
+
+            if create_response.status_code not in [200, 201]:
+                print(f"Error creando label {label['name']}")
+            else:
+                print(f"Label {label['name']} creado")
+
+    return True
 class GithubWebhookAPI(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -62,22 +119,28 @@ class GithubWebhookAPI(APIView):
         
         payload = request.data
         action = payload.get("action")
-        if action == "opened": #edited
+        if action in ["opened", "edited"]:
+
             issue_title = payload["issue"]["title"]
             issue_user = payload["issue"]["user"]["login"]
             issue_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
+            issue_body= payload["issue"]["body"]
+
             print(f"Nuevo issue detectado Titulo: {issue_title} por {issue_user}")
-            
+        
             installation_id = payload["installation"]["id"]
             token = get_installation_token(installation_id)
+            preds = predict_tag(f"{issue_title}. {issue_body or ''}")
+            if preds: 
+                predicted_label = preds["primary_label"]
+                ensure_default_labels(repo_full_name, token)
+                code = add_label_to_issue(repo_full_name, issue_number, token, predicted_label)
 
-            code = add_label_to_issue(repo_full_name, issue_number, token, "needs-triage")
-        
-            if code == 200:
-                print(f"Label 'needs-triage' añadido con éxito al issue #{issue_number}")
-            else:
-                print(f"Error al añadir label: {code}")
+                if code in [200, 201]:
+                    print(f"Label '{predicted_label}' añadido con éxito al issue #{issue_number}")
+                else:
+                    print(f"Error al añadir label: {code}")
 
 
         return Response({'status': 'received'}, status=status.HTTP_200_OK)
