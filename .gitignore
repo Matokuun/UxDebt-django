@@ -11,12 +11,10 @@ __pycache__/
 
 # Modelo de aprendizaje automatico
 model_clasificator/
+model_ux_smells/
 
 # Base de datos local
 *.sqlite3
-
-# Archivos de configuración local
-#.env
 
 # Archivos y carpetas de logs
 *.log

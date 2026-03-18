@@ -117,7 +117,7 @@ class IssueTagPredicted(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='predicted_for_issues')
 
     confidence = models.FloatField(default=0.0)  # Probabilidad de la predicción
-    rank = models.PositiveIntegerField(default=1)  # 1 = top prediction, 2 = segunda mejor, etc.
+    rank = models.PositiveIntegerField(default=1)  # 1 = top prediction, 2 = segunda mejor, 3 = ux smell
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -1,6 +1,6 @@
 import requests
 from .models import Repository, Issue, GitHubToken, Tag, IssueTag, IssueTagPredicted
-from .predictor import predict_tag
+from .predictor import predict_tag, predict_ux_smell
 from urllib.parse import urlparse
 
 class GitService:
@@ -148,7 +148,7 @@ class GitService:
                 "description": "User experience bug"
             },
             {
-                "name": "UX ISSUE",
+                "name": "UX SMELL",
                 "color": "fbca04",
                 "description": "User experience smell or UX inconsistency"
             },
@@ -161,6 +161,41 @@ class GitService:
                 "name": "FEATURE REQUEST",
                 "color": "5319e7",
                 "description": "New feature request"
+            },
+            {
+                "name": "CLIPPED/OVERLAPPING UI",
+                "color": "fbca04",
+                "description": "UI elements overlap or are visually clipped"
+            },
+            {
+                "name": "INCONSISTENT FEEDBACK",
+                "color": "fbca04",
+                "description": "System feedback is inconsistent or unclear"
+            },
+            {
+                "name": "POOR ACCESSIBILITY",
+                "color": "fbca04",
+                "description": "Contrast/color visibility problems or use of a screen reader that reduces accessibility."
+            },
+            {
+                "name": "POOR DISCOVERABILITY",
+                "color": "fbca04",
+                "description": "Features or actions are difficult to find"
+            },
+            {
+                "name": "UI INCONSISTENCY",
+                "color": "fbca04",
+                "description": "Inconsistent UI patterns or design elements"
+            },
+            {
+                "name": "UNDESCRIPTIVE ELEMENT",
+                "color": "fbca04",
+                "description": "UI elements lack clear labeling or meaning"
+            },
+            {
+                "name": "WRONG DEFAULT VALUE",
+                "color": "fbca04",
+                "description": "Incorrect or misleading default values"
             }
         ]
 
@@ -307,6 +342,22 @@ class GitService:
                     issue= existing_issue if existing_issue else new_issue,
                     tag= tag1
                 )
+                if (preds["primary_label"] == "UX ISSUE"):
+                    preds_ux_smell= predict_ux_smell(f"{issue_data['title']}. {issue_data['body'] or ''}")
+                    if preds_ux_smell:
+                        tag3, _ = Tag.objects.get_or_create(name=preds_ux_smell["label"])
+                        IssueTagPredicted.objects.update_or_create(
+                            issue=existing_issue if existing_issue else new_issue,
+                            tag=tag3,
+                            defaults={
+                                "confidence": preds_ux_smell["score"],
+                                "rank": 3
+                            }
+                        )
+                        IssueTag.objects.update_or_create(
+                            issue= existing_issue if existing_issue else new_issue,
+                            tag= tag3
+                        )
         return {
             "is_success": True,
             "response_code": 200,
@@ -422,6 +473,22 @@ class GitService:
                         issue= existing_issue if existing_issue else new_issue,
                         tag= tag1
                     )
+                    if (preds["primary_label"] == "UX ISSUE"):
+                        preds_ux_smell= predict_ux_smell(f"{issue_data['title']}. {issue_data['body'] or ''}")
+                        if preds_ux_smell:
+                            tag3, _ = Tag.objects.get_or_create(name=preds_ux_smell["label"])
+                            IssueTagPredicted.objects.update_or_create(
+                                issue=existing_issue if existing_issue else new_issue,
+                                tag=tag3,
+                                defaults={
+                                    "confidence": preds_ux_smell["score"],
+                                    "rank": 3
+                                }
+                            )
+                            IssueTag.objects.update_or_create(
+                                issue= existing_issue if existing_issue else new_issue,
+                                tag= tag3
+                            )
 
             if label is not None:
                 repo.labels.append(label)
@@ -513,8 +580,6 @@ class GitService:
         org_query = PROJECT_QUERY % "organization"
         org_payload = self._run_graphql(org_query, variables)
 
-        print("ORG PAYLOAD:", org_payload)
-
         project = (
             org_payload
             .get("data", {})
@@ -535,8 +600,6 @@ class GitService:
         
         user_query = PROJECT_QUERY % "user"
         user_payload = self._run_graphql(user_query, variables)
-
-        print("USER PAYLOAD:", user_payload)
 
         project = (
             user_payload

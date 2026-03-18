@@ -7,7 +7,7 @@ import hmac
 import hashlib
 import jwt
 import time
-from api.predictor import predict_tag
+from api.predictor import predict_tag, predict_ux_smell
 
 DEFAULT_LABELS = [
     {
@@ -34,7 +34,43 @@ DEFAULT_LABELS = [
         "name": "FEATURE REQUEST",
         "color": "5319e7",
         "description": "New feature request"
-    }
+    },
+    {
+        "name": "CLIPPED/OVERLAPPING UI",
+        "color": "fbca04",
+        "description": "UI elements overlap or are visually clipped"
+    },
+    {
+        "name": "INCONSISTENT FEEDBACK",
+        "color": "fbca04",
+        "description": "System feedback is inconsistent or unclear"
+    },
+    {
+        "name": "POOR ACCESSIBILITY",
+        "color": "fbca04",
+        "description": "Contrast/color visibility problems or use of a screen reader that reduces accessibility."
+    },
+    {
+        "name": "POOR DISCOVERABILITY",
+        "color": "fbca04",
+        "description": "Features or actions are difficult to find"
+    },
+    {
+        "name": "UI INCONSISTENCY",
+        "color": "fbca04",
+        "description": "Inconsistent UI patterns or design elements"
+    },
+    {
+        "name": "UNDESCRIPTIVE ELEMENT",
+        "color": "fbca04",
+        "description": "UI elements lack clear labeling or meaning"
+    },
+    {
+        "name": "WRONG DEFAULT VALUE",
+        "color": "fbca04",
+        "description": "Incorrect or misleading default values"
+    },
+
 ]
 
 def get_installation_token(installation_id):
@@ -134,13 +170,22 @@ class GithubWebhookAPI(APIView):
             preds = predict_tag(f"{issue_title}. {issue_body or ''}")
             if preds: 
                 predicted_label = preds["primary_label"]
+                if (predicted_label == "UX ISSUE"):
+                    predicted_label = "UX SMELL"
                 ensure_default_labels(repo_full_name, token)
                 code = add_label_to_issue(repo_full_name, issue_number, token, predicted_label)
-
                 if code in [200, 201]:
                     print(f"Label '{predicted_label}' añadido con éxito al issue #{issue_number}")
                 else:
                     print(f"Error al añadir label: {code}")
+                if predicted_label == "UX SMELL":
+                    preds_ux_smell= predict_ux_smell(f"{issue_title}. {issue_body or ''}")
+                    secondary_label = preds_ux_smell["label"]
+                    code_secondary= add_label_to_issue(repo_full_name, issue_number, token, secondary_label)
+                    if code_secondary in [200, 201]:
+                        print(f"Label '{secondary_label}' añadido con éxito al issue #{issue_number}")
+                    else:
+                        print(f"Error al añadir label: {code_secondary}")
 
 
         return Response({'status': 'received'}, status=status.HTTP_200_OK)

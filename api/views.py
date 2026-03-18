@@ -9,7 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 
-from api.predictor import predict_tag
+from api.predictor import predict_tag, predict_ux_smell
 from .models import IssueTagPredicted, Repository, Issue, Tag, IssueTag, GitHubToken, Project, ProjectIssue
 from .serializers import IssueWithProjectsViewSerializer, RepositoryGetAllSerializer, IssueSerializer, TagSerializer, IssueTagSerializer, GetIssueViewModelSerializer, GitConfigSerializer, RegisterSerializer, ProjectSerializer, ProjectListSerializer, IssueProjectSerializer, IssueWithProjectsSerializer
 from .filters import IssueFilter
@@ -409,6 +409,27 @@ class IssueViewSet(viewsets.ModelViewSet):
                     tag=tag2,
                     defaults={"confidence": preds["secondary_score"], "rank": 2}
                 )
+                #A partir de aca, podría ser opcional, pero lo agrego para que la app sea consistente con todos los issues.
+                IssueTag.objects.update_or_create(
+                    issue= issue,
+                    tag= tag1
+                )
+                if (preds["primary_label"] == "UX ISSUE"):
+                    preds_ux_smell= predict_ux_smell(f"{title}. {body or ''}")
+                    if preds_ux_smell:
+                        tag3, _ = Tag.objects.get_or_create(name=preds_ux_smell["label"])
+                        IssueTagPredicted.objects.update_or_create(
+                            issue=issue,
+                            tag=tag3,
+                            defaults={
+                                "confidence": preds_ux_smell["score"],
+                                "rank": 3
+                            }
+                        )
+                        IssueTag.objects.update_or_create(
+                            issue=issue,
+                            tag= tag3
+                        )
 
             serializer = IssueSerializer(issue)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -868,6 +889,26 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     issue= issue,
                     tag= tag1
                 )
+
+                if predicted_label == "UX ISSUE":
+                    preds_ux_smell= predict_ux_smell(f"{content['title']}. {content.get('body') or ''}")
+                    if preds_ux_smell:
+                        tag3, _ = Tag.objects.get_or_create(name=preds_ux_smell["label"])
+                        IssueTagPredicted.objects.update_or_create(
+                            issue=issue,
+                            tag=tag3,
+                            defaults={
+                                "confidence": preds_ux_smell["score"],
+                                "rank": 3
+                            }
+                        )
+                        IssueTag.objects.update_or_create(
+                            issue= issue,
+                            tag= tag3
+                        )
+                        issue.labels = f"{issue.labels}, {predicted_label}"
+                        issue.save(update_fields=["labels"])
+
                 if repo_owner and repo_name:
                     issue_number = git_service.extract_issue_number(content["url"])
                     if issue_number:
@@ -875,7 +916,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                             owner=repo_owner,
                             repo=repo_name,
                             issue_number=issue_number,
-                            label_name=tag1.name
+                            label_name= "UX SMELL" if tag1.name == "UX ISSUE" else tag1.name
                         )
 
             status_value = "TODO"
@@ -995,13 +1036,32 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
                     IssueTag.objects.update_or_create(issue=issue, tag=tag1)
 
+                    if predicted_label == "UX ISSUE":
+                        preds_ux_smell= predict_ux_smell(f"{content['title']}. {content.get('body') or ''}")
+                        if preds_ux_smell:
+                            tag3, _ = Tag.objects.get_or_create(name=preds_ux_smell["label"])
+                            IssueTagPredicted.objects.update_or_create(
+                                issue=issue,
+                                tag=tag3,
+                                defaults={
+                                    "confidence": preds_ux_smell["score"],
+                                    "rank": 3
+                                }
+                            )
+                            IssueTag.objects.update_or_create(
+                                issue= issue,
+                                tag= tag3
+                            )
+                            issue.labels = f"{issue.labels}, {predicted_label}"
+                            issue.save(update_fields=["labels"])
+
                     issue_number = git_service.extract_issue_number(content["url"])
                     if issue_number:
                         git_service.apply_label_to_issue(
                             owner=repo_owner,
                             repo=repo_name,
                             issue_number=issue_number,
-                            label_name=tag1.name
+                            label_name= "UX SMELL" if tag1.name == "UX ISSUE" else tag1.name
                         )
 
         return Response({"message": "Proyecto actualizado correctamente"})
