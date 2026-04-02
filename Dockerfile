@@ -8,8 +8,10 @@ RUN apt-get update && apt-get install -y \
     git pkg-config gcc \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/Matokuun/UxDebt-django.git src
-WORKDIR /app/src
+
+#RUN git clone https://github.com/Matokuun/UxDebt-django.git src
+#WORKDIR /app/src
+COPY . .
 
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt

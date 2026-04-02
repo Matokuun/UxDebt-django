@@ -1,45 +1,57 @@
-version: '3.9'
 
 services:
+  api:
+    build:
+      context: .
+    container_name: ux-issue-tracker-api
+    volumes:
+      - .:/app/src
+    ports:
+      - "${APP_PORT}:8000"
+    depends_on:
+      - db
+    environment:
+      APP_HOST: ${APP_HOST}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_HOST: ${DB_HOST}
+      GITHUB_APP_ID: ${GITHUB_APP_ID}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      GITHUB_PRIVATE_KEY_PATH: ${GITHUB_PRIVATE_KEY_PATH}
+    networks:
+      - ux-issue-tracker-network
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.ux-issue-tracker-api.rule=Host(`${APP_HOST}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.ux-issue-tracker-api.entrypoints=websecure"
+      - "traefik.http.routers.ux-issue-tracker-api.tls.certresolver=myresolver"
+      # Forward requests to the correct port on the container
+      - "traefik.http.services.ux-issue-tracker-api.loadbalancer.server.port=8000"
+      # Middleware to strip the /api prefix before forwarding to the service
+      - "traefik.http.routers.ux-issue-tracker-api.middlewares=ux-issue-tracker-strip-api-prefix"
+      - "traefik.http.middlewares.ux-issue-tracker-strip-api-prefix.stripprefix.prefixes=/api"
   db:
     image: postgres:15
+    container_name: ux-issue-tracker-db
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     networks:
-      - uxdebt-network
-
-  backend:
-    build:
-      context: .
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-    env_file:
-      - .env
-    networks:
-      - uxdebt-network
-
-  frontend:
-    build:
-      context: ../UxDebt-front
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    networks:
-      - uxdebt-network
+      - ux-issue-tracker-network
 
 volumes:
   postgres_data:
 
 networks:
-  uxdebt-network:
+  ux-issue-tracker-network:
     driver: bridge
+  traefik-public:
+    external: true
