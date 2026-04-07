@@ -31,8 +31,8 @@ services:
       # Forward requests to the correct port on the container
       - "traefik.http.services.ux-issue-tracker-api.loadbalancer.server.port=8000"
       # Middleware to strip the /api prefix before forwarding to the service
-      - "traefik.http.routers.ux-issue-tracker-api.middlewares=ux-issue-tracker-strip-api-prefix"
-      - "traefik.http.middlewares.ux-issue-tracker-strip-api-prefix.stripprefix.prefixes=/api"
+      #- "traefik.http.routers.ux-issue-tracker-api.middlewares=ux-issue-tracker-strip-api-prefix"
+      #- "traefik.http.middlewares.ux-issue-tracker-strip-api-prefix.stripprefix.prefixes=/api"
   db:
     image: postgres:15
     container_name: ux-issue-tracker-db
