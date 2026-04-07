@@ -32,6 +32,7 @@ torch==2.4.1+cpu
 transformers==4.46.3
 tokenizers==0.20.3
 safetensors==0.7.0
+numpy<2.0.0 # Avoid numpy 2.0 due to compatibility issues with some ML libraries
 
 # ML Dependencies - Minimal HuggingFace
 huggingface_hub==0.36.1
