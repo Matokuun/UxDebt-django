@@ -30,7 +30,11 @@ SECRET_KEY = 'django-insecure-b)ww+kmy^*!0y)zq=bv$5uki&-@6ew3p7wepgy^$@ajn@16l9)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', 'issue-tracker-api.okd.lifia.info.unlp.edu.ar','semiwild-bernarda-spoilable.ngrok-free.dev']
+ALLOWED_HOSTS = ['localhost', 'semiwild-bernarda-spoilable.ngrok-free.dev', os.getenv("APP_HOST")]
+
+# Https and proxy settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 
 # Application definition

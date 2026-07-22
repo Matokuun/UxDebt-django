@@ -6,5 +6,5 @@ urlpatterns = [
     path('', home, name='home'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
-    path('webhooks', include('webhooks.urls')),
+    path('api/webhooks/', include('webhooks.urls')),
 ]
