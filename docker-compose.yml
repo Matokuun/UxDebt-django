@@ -4,6 +4,7 @@ services:
     build:
       context: .
     container_name: ux-issue-tracker-api
+    restart: unless-stopped
     volumes:
       - .:/app/src
     ports:
@@ -36,6 +37,7 @@ services:
   db:
     image: postgres:15
     container_name: ux-issue-tracker-db
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
